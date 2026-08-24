@@ -30,6 +30,7 @@ export function createDefaultTrip(): Trip {
     endDate: '',
     days: 0,
     pace: 'balanced',
+    tripVibe: '',
     preferences: [],
     travelers: [
       { id: 'traveler-organizer', fullName: 'Trip organizer', age: 18, email: '', role: 'organizer' }

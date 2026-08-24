@@ -8,7 +8,8 @@ import { useResponsive } from './useResponsive';
 
 export function Header() {
   const pathname = usePathname();
-  const { isMobile } = useResponsive();
+  const { isMobile, width } = useResponsive();
+  const useCompactNav = width < 1120;
   const [menuOpen, setMenuOpen] = useState(false);
   const pageNav = [
     { label: 'Home', href: '/' },
@@ -26,10 +27,10 @@ export function Header() {
       <Container style={styles.headerContainer}>
         <Link href="/" asChild>
           <Pressable accessibilityRole="link">
-            <Logo style={styles.headerLogo} />
+            <Logo style={StyleSheet.flatten([styles.headerLogo, useCompactNav && styles.headerLogoCompact])} />
           </Pressable>
         </Link>
-        {isMobile ? (
+        {useCompactNav ? (
           <>
             <Button variant="ghost" icon={menuOpen ? <X size={20} color={colors.primary} /> : <Menu size={20} color={colors.primary} />} onPress={() => setMenuOpen(true)}>Menu</Button>
             <AppModal visible={menuOpen} title="Menu" onClose={() => setMenuOpen(false)}>
@@ -90,7 +91,7 @@ export function Header() {
           </Row>
         )}
       </Container>
-      {isMobile ? (
+      {useCompactNav ? (
         <Row style={styles.mobileServiceBar} gap={0}>
           {[
             { label: 'Flights', icon: Plane },
@@ -159,6 +160,7 @@ const styles = StyleSheet.create({
   header: { backgroundColor: 'rgba(255,255,255,0.95)', borderBottomWidth: 1, borderBottomColor: colors.border, shadowColor: colors.primaryDark, shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 2 }, elevation: 4, zIndex: 30 },
   headerContainer: { minHeight: 80, paddingVertical: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerLogo: { width: 228, height: 64 },
+  headerLogoCompact: { width: 186, height: 56 },
   navItem: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   activeNavItem: { borderBottomColor: colors.primary, backgroundColor: 'transparent', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
   navDivider: { width: 1, height: 20, backgroundColor: colors.border, marginHorizontal: spacing.xs },

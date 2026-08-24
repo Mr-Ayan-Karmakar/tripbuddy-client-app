@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock, Edit3, Info, MapPin, Moon, Plane, Sparkles, Star, Utensils } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock, Edit3, Info, MapPin, Moon, Sparkles, Star, Utensils } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Footer, Header } from '../../src/rn/chrome';
@@ -17,6 +17,7 @@ const fallbackImages = [
 
 const paceLabel = { relaxed: 'Relaxed', balanced: 'Balanced', fast: 'Fast-paced' };
 const paceIcon = { relaxed: '🌿', balanced: '⚖️', fast: '⚡' };
+const MIN_VIBE_MATCHED_PLACES = 2;
 
 export default function ItineraryRoute() {
   const router = useRouter();
@@ -26,6 +27,8 @@ export default function ItineraryRoute() {
   const [detailsActivity, setDetailsActivity] = useState<Activity | undefined>();
   const day = trip.itinerary.find((item) => item.id === selectedDay) ?? trip.itinerary[0];
   const restaurants = uniqueRestaurants(day?.activities.flatMap((activity) => activity.restaurants ?? []) ?? []);
+  const tripVibe = trip.tripVibe?.trim() ?? '';
+  const hasFewVibeMatches = Boolean(tripVibe && day && !day.restDay && day.activities.length < MIN_VIBE_MATCHED_PLACES);
 
   useEffect(() => {
     if (!trip.itinerary.length) return;
@@ -70,6 +73,12 @@ export default function ItineraryRoute() {
                   </Row>
                   <Heading size="lg" style={styles.pageTitle}>{trip.days}-day trip to {trip.destination.city}</Heading>
                   <Text style={styles.pageSub}>{formatDisplayDate(trip.startDate)} - {formatDisplayDate(trip.endDate, true)} · {paceLabel[trip.pace]}</Text>
+                  {tripVibe ? (
+                    <Row gap={spacing.xs} style={styles.vibeBadge}>
+                      <Sparkles size={13} color={colors.accent} />
+                      <Text style={styles.vibeBadgeText}>Trip vibe: {tripVibe}</Text>
+                    </Row>
+                  ) : null}
                 </Stack>
                 {!isMobile ? (
                   <Row wrap>
@@ -95,8 +104,11 @@ export default function ItineraryRoute() {
                 <EmptyItinerary />
               ) : day.restDay ? (
                 <RestDay date={day.date} />
+              ) : hasFewVibeMatches && !day.activities.length ? (
+                <TripVibeNoMatches tripVibe={tripVibe} />
               ) : day.activities.length ? (
                 <Stack gap={spacing.sm}>
+                  {hasFewVibeMatches ? <TripVibeLowMatches tripVibe={tripVibe} count={day.activities.length} /> : null}
                   {day.activities.map((activity, index) => (
                     <View key={activity.id}>
                       {index > 0 && activity.travelFromPrevious ? <TravelConnector text={activity.travelFromPrevious} /> : null}
@@ -158,7 +170,8 @@ function Sidebar() {
               </Stack>
             </Row>
           ) : null}
-          <SummaryRow icon={<Plane size={16} color={colors.primary} />} label="Flying from" value={trip.source.city || '-'} />
+          {trip.tripVibe ? <SummaryRow icon={<Sparkles size={16} color={colors.accent} />} label="Trip vibe" value={trip.tripVibe} /> : null}
+          <SummaryRow icon={<MapPin size={16} color={colors.primary} />} label="Starting from" value={trip.source.city || '-'} />
           <View style={styles.rule} />
           <Button variant="secondary" onPress={editTripDetails} icon={<Edit3 size={16} color={colors.primary} />}>Edit trip details</Button>
         </Stack>
@@ -179,6 +192,7 @@ function Sidebar() {
 
 function MobileSummary() {
   const { trip } = useTrip();
+  const tripVibe = trip.tripVibe?.trim();
   return (
     <Card style={styles.mobileSummary}>
       <Row wrap style={{ alignItems: 'center' }}>
@@ -190,6 +204,12 @@ function MobileSummary() {
         <Text style={styles.mobileSummaryText}>{trip.days} days</Text>
         <Text style={styles.dotText}>·</Text>
         <Text style={styles.mobileSummaryText}>{paceIcon[trip.pace]} {paceLabel[trip.pace]}</Text>
+        {tripVibe ? (
+          <>
+            <Text style={styles.dotText}>·</Text>
+            <Text style={styles.mobileSummaryText}>Trip vibe: {tripVibe}</Text>
+          </>
+        ) : null}
       </Row>
     </Card>
   );
@@ -369,6 +389,31 @@ function EmptyDay() {
   );
 }
 
+function TripVibeNoMatches({ tripVibe }: { tripVibe: string }) {
+  return (
+    <Card style={styles.vibeEmptyCard}>
+      <Sparkles size={40} color={colors.accent} />
+      <Heading size="md" style={styles.vibeEmptyTitle}>Not enough matching popular places</Heading>
+      <Text style={styles.emptyText}>We couldn't find enough popular places matching "{tripVibe}" for this day. Try a broader Trip vibe or remove it to generate more options.</Text>
+    </Card>
+  );
+}
+
+function TripVibeLowMatches({ tripVibe, count }: { tripVibe: string; count: number }) {
+  const placeLabel = count === 1 ? 'place' : 'places';
+  return (
+    <Card style={styles.vibeNoticeCard}>
+      <Row gap={spacing.sm} style={{ alignItems: 'flex-start' }}>
+        <Sparkles size={17} color={colors.accent} />
+        <Stack gap={spacing.xs} style={{ flex: 1 }}>
+          <Text style={styles.vibeNoticeTitle}>Limited matches for this Trip vibe</Text>
+          <Text style={styles.vibeNoticeText}>Only {count} popular {placeLabel} matched "{tripVibe}" for this day, so the plan may feel lighter than usual.</Text>
+        </Stack>
+      </Row>
+    </Card>
+  );
+}
+
 function EmptyItinerary() {
   return (
     <Card style={styles.emptyCard}>
@@ -420,6 +465,8 @@ const styles = StyleSheet.create({
   mobileSummaryText: { color: colors.muted, fontSize: 12 },
   pageTitle: { fontSize: 24, lineHeight: 31 },
   pageSub: { color: colors.muted, fontSize: 14 },
+  vibeBadge: { alignSelf: 'flex-start', alignItems: 'center', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, backgroundColor: '#FFF7ED', paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  vibeBadgeText: { color: colors.accent, fontSize: 12, fontWeight: '900' },
   breadcrumb: { color: colors.muted, fontSize: 12 },
   breadcrumbStrong: { color: colors.text, fontSize: 12, fontWeight: '800' },
   dayTabs: { gap: spacing.sm, paddingBottom: spacing.xs },
@@ -464,6 +511,11 @@ const styles = StyleSheet.create({
   reviewAuthor: { fontSize: 13, fontWeight: '900' },
   reviewText: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   emptyCard: { borderStyle: 'dashed', alignItems: 'center', padding: spacing.xxl },
+  vibeEmptyCard: { borderStyle: 'dashed', alignItems: 'center', padding: spacing.xxl, borderColor: '#FED7AA', backgroundColor: '#FFF7ED' },
+  vibeEmptyTitle: { color: colors.primaryDark, textAlign: 'center' },
+  vibeNoticeCard: { borderRadius: radius.lg, borderColor: '#FED7AA', backgroundColor: '#FFF7ED', padding: spacing.md },
+  vibeNoticeTitle: { color: colors.primaryDark, fontSize: 13, fontWeight: '900' },
+  vibeNoticeText: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   emptyGeneratedCard: { minHeight: 320, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl },
   restIcon: { width: 52, height: 52, borderRadius: 999, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: colors.muted, textAlign: 'center', maxWidth: 360 },

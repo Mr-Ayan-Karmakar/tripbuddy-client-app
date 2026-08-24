@@ -113,6 +113,7 @@ function createDraftTrip(current: Trip, input: { source: string; destination: st
     startDate: input.startDate,
     days: input.days,
     pace: input.pace,
+    tripVibe: input.preferenceText.trim(),
     preferences: input.preferences,
     itinerary: input.itinerary ?? current.itinerary,
     endDate,

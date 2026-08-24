@@ -112,6 +112,7 @@ export type Trip = {
   endDate: string;
   days: number;
   pace: Pace;
+  tripVibe?: string;
   preferences: string[];
   travelers: Traveler[];
   itinerary: DayPlan[];

@@ -31,7 +31,8 @@ const paceOptions: Array<{ id: Pace; label: string; icon: string }> = [
 
 export default function PlannerRoute() {
   const router = useRouter();
-  const { isDesktop } = useResponsive();
+  const { width } = useResponsive();
+  const useWideForm = width >= 1120;
   const { plannerInput, trip, setDraft } = useTrip();
   const hasPlannerInput = Boolean(plannerInput.source || plannerInput.destination);
   const plannerInputMatchesTrip = plannerInput.source === trip.source.city && plannerInput.destination === trip.destination.city;
@@ -65,13 +66,15 @@ export default function PlannerRoute() {
     setIsGenerating(true);
     try {
       const activeDates = computeActiveDates(startDate, numericDays, restDays);
-      const prompt = [tripIdea.trim(), preferences.join(', ')].filter(Boolean).join('. ') || `Plan a trip to ${destination}.`;
+      const trimmedTripVibe = tripIdea.trim();
+      const prompt = [trimmedTripVibe, preferences.join(', ')].filter(Boolean).join('. ') || `Plan a trip to ${destination}.`;
       const itinerary = await generateItinerary({
         source,
         destination,
         startDate,
         days: numericDays,
         activeDates,
+        tripVibe: trimmedTripVibe || undefined,
         pace,
         prompt
       });
@@ -91,7 +94,7 @@ export default function PlannerRoute() {
         <CalendarCss />
         <View style={styles.banner}>
           <View style={styles.bannerGlow} />
-          <Container style={styles.bannerInner}>
+          <Container style={StyleSheet.flatten([styles.bannerInner, !useWideForm && styles.bannerInnerCompact])}>
             <Stack>
               <Text style={styles.eyebrow}>Trip Planner</Text>
               <Heading size="xl" style={styles.bannerTitle}>
@@ -109,11 +112,11 @@ export default function PlannerRoute() {
           <Container>
             <View style={styles.formCard}>
               <View style={styles.formAccentBar} />
-              <View style={styles.formBody}>
+              <View style={StyleSheet.flatten([styles.formBody, width < 760 && styles.formBodyCompact])}>
               <Stack gap={spacing.xl}>
                 <Stack gap={spacing.lg} style={styles.colorPanelBlue}>
                   <SectionTitle color={colors.primary}>Origin &amp; Dates</SectionTitle>
-                <Row style={{ flexDirection: isDesktop ? 'row' : 'column' }}>
+                <Row style={{ flexDirection: useWideForm ? 'row' : 'column' }}>
                   <PlannerInput icon={<Search size={16} color={colors.primary} />} label="Leaving from" value={source} onChangeText={setSource} placeholder="City or airport" />
                   <PlannerInput icon={<MapPin size={16} color={colors.accent} />} label="Destination" value={destination} onChangeText={setDestination} placeholder="Where to?" />
                   <Stack gap={spacing.xs} style={styles.datePickerField}>
@@ -157,12 +160,12 @@ export default function PlannerRoute() {
 
                 <View style={styles.rule} />
 
-                <Row style={{ flexDirection: isDesktop ? 'row' : 'column' }}>
-                  <Stack style={StyleSheet.flatten([styles.colorPanelViolet, { flex: 1 }])} gap={spacing.md}>
+                <Row style={{ flexDirection: useWideForm ? 'row' : 'column', alignItems: 'stretch' }}>
+                  <Stack style={StyleSheet.flatten([styles.colorPanelViolet, useWideForm ? { flex: 1 } : styles.fullWidth])} gap={spacing.md}>
                     <Row style={{ alignItems: 'center' }}><SectionTitle color="#A78BFA">Trip vibe</SectionTitle><Text style={styles.optional}>Optional</Text></Row>
                     <TextInput accessibilityLabel="Trip vibe" value={tripIdea} onChangeText={setTripIdea} multiline placeholder="Describe your ideal trip - beaches, street food, temples, photography spots..." placeholderTextColor="rgba(90,100,128,0.5)" style={styles.textArea} />
                   <Text style={{ color: colors.muted, fontSize: 13 }}>Or pick your interests:</Text>
-                  <Row wrap>
+                  <View style={styles.prefGrid}>
                     {preferenceChips.map((pref) => {
                       const selected = preferences.includes(pref);
                       const palette = preferencePalette[pref] ?? defaultPreferencePalette;
@@ -183,9 +186,9 @@ export default function PlannerRoute() {
                         </Pressable>
                       );
                     })}
-                  </Row>
+                  </View>
                 </Stack>
-                <Stack style={StyleSheet.flatten([styles.colorPanelCyan, { flex: 1 }])} gap={spacing.md}>
+                <Stack style={StyleSheet.flatten([styles.colorPanelCyan, useWideForm ? { flex: 1 } : styles.fullWidth])} gap={spacing.md}>
                   <Pressable onPress={() => setRestOpen((value) => !value)} style={styles.restHeader}>
                     <SectionTitle color={colors.cyan}>Rest / inactive days</SectionTitle>
                     <ChevronRight size={14} color={colors.muted} style={StyleSheet.flatten([restOpen && styles.rotated])} />
@@ -250,7 +253,7 @@ export default function PlannerRoute() {
                 {canGenerate ? <>Ready! Building <Text style={{ fontWeight: '800' }}>{numericDays} active days</Text> for <Text style={{ fontWeight: '800' }}>{destination || 'your destination'}</Text>, ending {formatShortDate(endDate)}.</> : 'Fill in the required fields above to get started.'}
               </Text>
               {generateError ? <Text style={styles.errorText}>{generateError}</Text> : null}
-              <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canGenerate || isGenerating }} onPress={generate} style={StyleSheet.flatten([styles.generateButton, (!canGenerate || isGenerating) && styles.generateDisabled])}>
+              <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canGenerate || isGenerating }} onPress={generate} style={StyleSheet.flatten([styles.generateButton, width < 760 && styles.generateButtonCompact, (!canGenerate || isGenerating) && styles.generateDisabled])}>
                 <Sparkles size={16} color={canGenerate && !isGenerating ? colors.surface : 'rgba(90,100,128,0.5)'} />
                 <Text style={StyleSheet.flatten([styles.generateText, (!canGenerate || isGenerating) && styles.generateTextDisabled])}>{isGenerating ? 'Generating...' : 'Generate itinerary'}</Text>
               </Pressable>
@@ -491,6 +494,7 @@ const styles = StyleSheet.create({
   banner: { position: 'relative', backgroundImage: 'linear-gradient(135deg, #092141 0%, #17438D 48%, #2575F1 78%, #5EC8DF 100%)' as never, overflow: 'hidden' },
   bannerGlow: { ...StyleSheet.absoluteFillObject, opacity: 0.22, backgroundImage: 'radial-gradient(circle at 76% 18%, rgba(248,105,30,0.82) 0%, rgba(248,105,30,0.28) 28%, transparent 56%)' as never },
   bannerInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: spacing.xl, paddingVertical: 44 },
+  bannerInnerCompact: { flexDirection: 'column', alignItems: 'flex-start', paddingVertical: 32 },
   eyebrow: { color: colors.cyan, fontSize: 12, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   bannerTitle: { color: colors.surface, fontSize: 38, lineHeight: 46 },
   bannerText: { color: 'rgba(255,255,255,0.78)', fontSize: 14 },
@@ -498,10 +502,12 @@ const styles = StyleSheet.create({
   formCard: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(37,117,241,0.18)', overflow: 'visible', shadowColor: '#1A5F72', shadowOpacity: 0.1, shadowRadius: 26, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   formAccentBar: { height: 6, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundImage: 'linear-gradient(90deg, #2575F1 0%, #5EC8DF 34%, #F8691E 68%, #8B5CF6 100%)' as never },
   formBody: { padding: spacing.xxl },
+  formBodyCompact: { padding: spacing.lg },
   colorPanelBlue: { borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FBFF 0%, #EBF2FE 100%)' as never, padding: spacing.lg },
   colorPanelOrange: { borderWidth: 1, borderColor: '#FED7AA', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FFF7ED 0%, #FEF0EB 100%)' as never, padding: spacing.lg },
   colorPanelViolet: { borderWidth: 1, borderColor: '#DDD6FE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FBF9FF 0%, #F5F3FF 100%)' as never, padding: spacing.lg },
   colorPanelCyan: { borderWidth: 1, borderColor: '#A5F3FC', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FEFF 0%, #ECFEFF 100%)' as never, padding: spacing.lg },
+  fullWidth: { width: '100%' },
   dot: { width: 8, height: 8, borderRadius: 999, backgroundColor: colors.primary },
   sectionLabel: { color: colors.muted, textTransform: 'uppercase', letterSpacing: 1, fontSize: 12, fontWeight: '900' },
   optional: { color: colors.muted, backgroundColor: colors.surfaceMuted, borderRadius: 999, overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, fontSize: 12 },
@@ -531,7 +537,8 @@ const styles = StyleSheet.create({
   segmentText: { color: colors.muted, fontSize: 14, fontWeight: '700' },
   segmentTextSelected: { color: colors.text },
   textArea: { minHeight: 76, borderWidth: 1, borderColor: '#DDD6FE', borderRadius: radius.md, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: spacing.md, textAlignVertical: 'top', fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
-  prefChip: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: 999, paddingHorizontal: spacing.md },
+  prefGrid: { display: 'grid' as never, gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))' as never, gap: spacing.sm },
+  prefChip: { minHeight: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: 999, paddingHorizontal: spacing.md },
   prefText: { fontSize: 12, fontWeight: '800' },
   prefTextSelected: { color: colors.surface },
   restHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -546,6 +553,7 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontSize: 13, flexShrink: 1 },
   ctaBar: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.xxl, paddingVertical: spacing.lg, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, justifyContent: 'space-between', alignItems: 'center', backgroundImage: 'linear-gradient(90deg, rgba(37,117,241,0.08), rgba(94,200,223,0.1), rgba(248,105,30,0.08))' as never },
   generateButton: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xxl, borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8691E 0%, #FF8C42 100%)' as never },
+  generateButtonCompact: { width: '100%' },
   generateDisabled: { backgroundImage: undefined as never, backgroundColor: colors.surfaceMuted },
   generateText: { color: colors.surface, fontWeight: '800', fontSize: 14 },
   generateTextDisabled: { color: 'rgba(90,100,128,0.5)' }

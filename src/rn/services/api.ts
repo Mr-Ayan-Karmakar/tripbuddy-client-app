@@ -31,6 +31,7 @@ type GenerateItineraryInput = {
   destination: string;
   days: number;
   activeDates: string[];
+  tripVibe?: string;
   prompt: string;
   budget?: 'low' | 'medium' | 'high';
   pace: Pace;
@@ -51,6 +52,7 @@ type ApiItineraryDay = {
   date?: string;
   theme?: string;
   title?: string;
+  restDay?: boolean;
   activities?: ApiItineraryActivity[];
 };
 
@@ -145,6 +147,7 @@ export async function generateItinerary(input: GenerateItineraryInput): Promise<
       destination: input.destination,
       days: input.days,
       activeDates: input.activeDates,
+      ...(input.tripVibe ? { tripVibe: input.tripVibe } : {}),
       prompt: input.prompt,
       budget: input.budget ?? 'medium',
       pace: input.pace === 'fast' ? 'packed' : input.pace
@@ -227,7 +230,7 @@ function mapItineraryDay(day: ApiItineraryDay, index: number): DayPlan {
     dayNumber,
     date: day.date ?? '',
     title: day.title ?? day.theme ?? `Day ${dayNumber}`,
-    restDay: (day.activities ?? []).length === 0,
+    restDay: day.restDay === true,
     activities: (day.activities ?? []).map((activity, activityIndex) => mapItineraryActivity(activity, dayNumber, activityIndex))
   };
 }
