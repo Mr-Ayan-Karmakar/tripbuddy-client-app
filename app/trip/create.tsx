@@ -108,17 +108,18 @@ export default function PlannerRoute() {
         <PlannerContentScope>
           <Container>
             <View style={styles.formCard}>
+              <View style={styles.formAccentBar} />
               <View style={styles.formBody}>
               <Stack gap={spacing.xl}>
-                <Stack gap={spacing.lg}>
+                <Stack gap={spacing.lg} style={styles.colorPanelBlue}>
                   <SectionTitle color={colors.primary}>Origin &amp; Dates</SectionTitle>
                 <Row style={{ flexDirection: isDesktop ? 'row' : 'column' }}>
-                  <PlannerInput icon={<Search size={16} color={colors.muted} />} label="Leaving from" value={source} onChangeText={setSource} placeholder="City or airport" />
-                  <PlannerInput icon={<MapPin size={16} color={colors.muted} />} label="Destination" value={destination} onChangeText={setDestination} placeholder="Where to?" />
+                  <PlannerInput icon={<Search size={16} color={colors.primary} />} label="Leaving from" value={source} onChangeText={setSource} placeholder="City or airport" />
+                  <PlannerInput icon={<MapPin size={16} color={colors.accent} />} label="Destination" value={destination} onChangeText={setDestination} placeholder="Where to?" />
                   <Stack gap={spacing.xs} style={styles.datePickerField}>
                     <Text style={styles.inputLabel}>Start date</Text>
                     <Pressable accessibilityRole="button" accessibilityLabel="Start date" onPress={() => setCalendarOpen((value) => !value)} style={styles.inputShell}>
-                      <Calendar size={16} color={colors.muted} />
+                      <Calendar size={16} color={colors.cyan} />
                       <Text style={StyleSheet.flatten([styles.dateValue, !startDate && styles.placeholderText])}>{startDate || 'Select date'}</Text>
                     </Pressable>
                     {calendarOpen ? (
@@ -127,7 +128,7 @@ export default function PlannerRoute() {
                       </CalendarPopover>
                     ) : null}
                   </Stack>
-                  <Stack style={{ flex: 1 }}>
+                  <Stack gap={spacing.xs} style={{ flex: 1 }}>
                     <Text style={styles.inputLabel}>Number of days</Text>
                     <Row gap={0} style={styles.stepper}>
                       <Pressable style={styles.stepperButton} onPress={() => { setDays(String(Math.max(1, numericDays - 1))); setRestDays([]); }}><Minus size={16} color={colors.muted} /></Pressable>
@@ -140,7 +141,7 @@ export default function PlannerRoute() {
 
                 <View style={styles.rule} />
 
-                <Stack gap={spacing.md}>
+                <Stack gap={spacing.md} style={styles.colorPanelOrange}>
                   <SectionTitle color={colors.accent}>Travel pace</SectionTitle>
                   <View style={styles.segmented}>
                     {paceOptions.map((option) => {
@@ -157,7 +158,7 @@ export default function PlannerRoute() {
                 <View style={styles.rule} />
 
                 <Row style={{ flexDirection: isDesktop ? 'row' : 'column' }}>
-                  <Stack style={{ flex: 1 }} gap={spacing.md}>
+                  <Stack style={StyleSheet.flatten([styles.colorPanelViolet, { flex: 1 }])} gap={spacing.md}>
                     <Row style={{ alignItems: 'center' }}><SectionTitle color="#A78BFA">Trip vibe</SectionTitle><Text style={styles.optional}>Optional</Text></Row>
                     <TextInput accessibilityLabel="Trip vibe" value={tripIdea} onChangeText={setTripIdea} multiline placeholder="Describe your ideal trip - beaches, street food, temples, photography spots..." placeholderTextColor="rgba(90,100,128,0.5)" style={styles.textArea} />
                   <Text style={{ color: colors.muted, fontSize: 13 }}>Or pick your interests:</Text>
@@ -184,7 +185,7 @@ export default function PlannerRoute() {
                     })}
                   </Row>
                 </Stack>
-                <Stack style={{ flex: 1 }} gap={spacing.md}>
+                <Stack style={StyleSheet.flatten([styles.colorPanelCyan, { flex: 1 }])} gap={spacing.md}>
                   <Pressable onPress={() => setRestOpen((value) => !value)} style={styles.restHeader}>
                     <SectionTitle color={colors.cyan}>Rest / inactive days</SectionTitle>
                     <ChevronRight size={14} color={colors.muted} style={StyleSheet.flatten([restOpen && styles.rotated])} />
@@ -487,21 +488,26 @@ const webStyles: Record<'plannerContentScope' | 'startCalendarPopover' | 'restCa
 };
 
 const styles = StyleSheet.create({
-  banner: { position: 'relative', backgroundImage: 'linear-gradient(135deg, #092141 0%, #17438D 55%, #2575F1 100%)' as never, overflow: 'hidden' },
-  bannerGlow: { ...StyleSheet.absoluteFillObject, opacity: 0.04, backgroundImage: 'radial-gradient(circle at 70% 50%, #5EC8DF 0%, transparent 60%)' as never },
-  bannerInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: spacing.xl, paddingVertical: 40 },
+  banner: { position: 'relative', backgroundImage: 'linear-gradient(135deg, #092141 0%, #17438D 48%, #2575F1 78%, #5EC8DF 100%)' as never, overflow: 'hidden' },
+  bannerGlow: { ...StyleSheet.absoluteFillObject, opacity: 0.22, backgroundImage: 'radial-gradient(circle at 76% 18%, rgba(248,105,30,0.82) 0%, rgba(248,105,30,0.28) 28%, transparent 56%)' as never },
+  bannerInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: spacing.xl, paddingVertical: 44 },
   eyebrow: { color: colors.cyan, fontSize: 12, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   bannerTitle: { color: colors.surface, fontSize: 38, lineHeight: 46 },
-  bannerText: { color: 'rgba(255,255,255,0.62)', fontSize: 14 },
-  bannerPill: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: 12, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', backgroundColor: 'rgba(255,255,255,0.08)' },
-  formCard: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(37,117,241,0.14)', overflow: 'visible', shadowColor: '#1A5F72', shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  bannerText: { color: 'rgba(255,255,255,0.78)', fontSize: 14 },
+  bannerPill: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: 12, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(9,33,65,0.34)' },
+  formCard: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(37,117,241,0.18)', overflow: 'visible', shadowColor: '#1A5F72', shadowOpacity: 0.1, shadowRadius: 26, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  formAccentBar: { height: 6, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundImage: 'linear-gradient(90deg, #2575F1 0%, #5EC8DF 34%, #F8691E 68%, #8B5CF6 100%)' as never },
   formBody: { padding: spacing.xxl },
+  colorPanelBlue: { borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FBFF 0%, #EBF2FE 100%)' as never, padding: spacing.lg },
+  colorPanelOrange: { borderWidth: 1, borderColor: '#FED7AA', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FFF7ED 0%, #FEF0EB 100%)' as never, padding: spacing.lg },
+  colorPanelViolet: { borderWidth: 1, borderColor: '#DDD6FE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FBF9FF 0%, #F5F3FF 100%)' as never, padding: spacing.lg },
+  colorPanelCyan: { borderWidth: 1, borderColor: '#A5F3FC', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FEFF 0%, #ECFEFF 100%)' as never, padding: spacing.lg },
   dot: { width: 8, height: 8, borderRadius: 999, backgroundColor: colors.primary },
   sectionLabel: { color: colors.muted, textTransform: 'uppercase', letterSpacing: 1, fontSize: 12, fontWeight: '900' },
   optional: { color: colors.muted, backgroundColor: colors.surfaceMuted, borderRadius: 999, overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, fontSize: 12 },
   inputLabel: { fontSize: 14, fontWeight: '700' },
   datePickerField: { flex: 1, position: 'relative', zIndex: 1200 },
-  inputShell: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: 14 },
+  inputShell: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: 'rgba(37,117,241,0.18)', borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: 14 },
   inputText: { flex: 1, minHeight: 42, color: colors.text, paddingHorizontal: spacing.sm, fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
   dateValue: { flex: 1, color: colors.text, fontSize: 14 },
   placeholderText: { color: 'rgba(90,100,128,0.5)' },
@@ -519,12 +525,12 @@ const styles = StyleSheet.create({
   stepperButton: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   stepperInput: { flex: 1, minHeight: 44, textAlign: 'center', color: colors.text, paddingHorizontal: spacing.sm, fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
   rule: { height: 1, backgroundColor: colors.border },
-  segmented: { alignSelf: 'flex-start', flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: 'rgba(238,241,248,0.4)', padding: spacing.xs, gap: spacing.xs },
+  segmented: { alignSelf: 'flex-start', flexDirection: 'row', borderWidth: 1, borderColor: 'rgba(248,105,30,0.22)', borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.62)', padding: spacing.xs, gap: spacing.xs },
   segment: { minHeight: 38, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.lg, borderRadius: radius.sm },
-  segmentSelected: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  segmentSelected: { backgroundColor: colors.surface, borderWidth: 1, borderColor: '#FDBA74', shadowColor: '#F8691E', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   segmentText: { color: colors.muted, fontSize: 14, fontWeight: '700' },
   segmentTextSelected: { color: colors.text },
-  textArea: { minHeight: 76, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, color: colors.text, paddingHorizontal: 14, paddingVertical: spacing.md, textAlignVertical: 'top', fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
+  textArea: { minHeight: 76, borderWidth: 1, borderColor: '#DDD6FE', borderRadius: radius.md, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, paddingVertical: spacing.md, textAlignVertical: 'top', fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
   prefChip: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: 999, paddingHorizontal: spacing.md },
   prefText: { fontSize: 12, fontWeight: '800' },
   prefTextSelected: { color: colors.surface },
@@ -532,13 +538,13 @@ const styles = StyleSheet.create({
   rotated: { transform: [{ rotate: '90deg' }] },
   restBox: { gap: spacing.md },
   restCalendarAnchor: { position: 'relative', alignSelf: 'flex-start', zIndex: 1200 },
-  secondaryButton: { alignSelf: 'flex-start', minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  secondaryButton: { alignSelf: 'flex-start', minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 14, borderWidth: 1, borderColor: '#A5F3FC', borderRadius: radius.md, backgroundColor: colors.surface },
   secondaryButtonText: { fontWeight: '400' },
   secondaryButtonDisabled: { borderColor: 'rgba(37,117,241,0.08)', backgroundColor: colors.surfaceMuted },
   restHelper: { color: colors.muted, fontSize: 12 },
-  restToken: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: 999, backgroundColor: colors.surfaceMuted, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  restToken: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: '#A5F3FC', borderRadius: 999, backgroundColor: '#ECFEFF', paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   errorText: { color: colors.danger, fontSize: 13, flexShrink: 1 },
-  ctaBar: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.xxl, paddingVertical: spacing.lg, flexDirection: 'row', gap: spacing.lg, justifyContent: 'space-between', alignItems: 'center', backgroundImage: 'linear-gradient(to right, rgba(26,95,114,0.04), rgba(26,95,114,0.02))' as never },
+  ctaBar: { borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.xxl, paddingVertical: spacing.lg, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, justifyContent: 'space-between', alignItems: 'center', backgroundImage: 'linear-gradient(90deg, rgba(37,117,241,0.08), rgba(94,200,223,0.1), rgba(248,105,30,0.08))' as never },
   generateButton: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xxl, borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8691E 0%, #FF8C42 100%)' as never },
   generateDisabled: { backgroundImage: undefined as never, backgroundColor: colors.surfaceMuted },
   generateText: { color: colors.surface, fontWeight: '800', fontSize: 14 },
