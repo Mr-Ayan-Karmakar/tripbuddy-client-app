@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   destinationCardMobile: { width: 230 },
   destinationImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   destinationImageHover: { transform: [{ scale: 1.05 }] },
-  destinationFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '58%', backgroundImage: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.36) 52%, rgba(0,0,0,0) 100%)' as never },
+  destinationFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '28%', backgroundImage: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.36) 52%, rgba(0,0,0,0) 100%)' as never },
   destinationTag: { position: 'absolute', top: spacing.md, left: spacing.md, color: colors.surface, backgroundColor: 'rgba(26,95,114,0.85)', borderRadius: 999, overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, fontSize: 11, fontWeight: '800' },
   destinationInfo: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: spacing.lg, paddingTop: 72 },
   destinationName: { color: colors.surface, fontWeight: '800', fontSize: 15, marginTop: spacing.sm }
