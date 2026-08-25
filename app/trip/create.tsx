@@ -114,7 +114,7 @@ export default function PlannerRoute() {
               <View style={styles.formAccentBar} />
               <View style={StyleSheet.flatten([styles.formBody, width < 760 && styles.formBodyCompact])}>
               <Stack gap={spacing.xl}>
-                <Stack gap={spacing.lg} style={styles.colorPanelBlue}>
+                <Stack gap={spacing.lg} style={StyleSheet.flatten([styles.colorPanelBlue, calendarOpen && styles.calendarOpenLayer])}>
                   <SectionTitle color={colors.primary}>Origin &amp; Dates</SectionTitle>
                 <Row style={{ flexDirection: useWideForm ? 'row' : 'column' }}>
                   <PlannerInput icon={<Search size={16} color={colors.primary} />} label="Leaving from" value={source} onChangeText={setSource} placeholder="City or airport" />
@@ -312,11 +312,6 @@ function CalendarCss() {
           pointer-events: auto !important;
         }
 
-        .tripbuddy-calendar-popover,
-        .tripbuddy-calendar-popover .css-175oi2r {
-          z-index: auto !important;
-        }
-
         .tripbuddy-calendar-popover {
           z-index: 2147483000 !important;
         }
@@ -504,6 +499,7 @@ const styles = StyleSheet.create({
   formBody: { padding: spacing.xxl },
   formBodyCompact: { padding: spacing.lg },
   colorPanelBlue: { borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FBFF 0%, #EBF2FE 100%)' as never, padding: spacing.lg },
+  calendarOpenLayer: { position: 'relative', zIndex: 10 },
   colorPanelOrange: { borderWidth: 1, borderColor: '#FED7AA', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FFF7ED 0%, #FEF0EB 100%)' as never, padding: spacing.lg },
   colorPanelViolet: { borderWidth: 1, borderColor: '#DDD6FE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FBF9FF 0%, #F5F3FF 100%)' as never, padding: spacing.lg },
   colorPanelCyan: { borderWidth: 1, borderColor: '#A5F3FC', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FEFF 0%, #ECFEFF 100%)' as never, padding: spacing.lg },
@@ -528,8 +524,8 @@ const styles = StyleSheet.create({
   dayTextDisabled: { color: colors.muted },
   dayTextSelected: { color: colors.surface },
   stepper: { minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface },
-  stepperButton: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
-  stepperInput: { flex: 1, minHeight: 44, textAlign: 'center', color: colors.text, paddingHorizontal: spacing.sm, fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
+  stepperButton: { width: 44, minWidth: 44, flexShrink: 0, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  stepperInput: { flex: 1, minWidth: 0, minHeight: 44, textAlign: 'center', color: colors.text, paddingHorizontal: spacing.sm, fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
   rule: { height: 1, backgroundColor: colors.border },
   segmented: { alignSelf: 'flex-start', flexDirection: 'row', borderWidth: 1, borderColor: 'rgba(248,105,30,0.22)', borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.62)', padding: spacing.xs, gap: spacing.xs },
   segment: { minHeight: 38, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.lg, borderRadius: radius.sm },
