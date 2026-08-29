@@ -9,12 +9,6 @@ import { useTrip } from '../../src/rn/state/tripStore';
 import { Activity, Restaurant } from '../../src/rn/types';
 import { useResponsive } from '../../src/rn/useResponsive';
 
-const fallbackImages = [
-  'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=640&q=80&fit=crop',
-  'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=640&q=80&fit=crop',
-  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=640&q=80&fit=crop'
-];
-
 const paceLabel = { relaxed: 'Relaxed', balanced: 'Balanced', fast: 'Fast-paced' };
 const paceIcon = { relaxed: '🌿', balanced: '⚖️', fast: '⚡' };
 const MIN_VIBE_MATCHED_PLACES = 2;
@@ -26,7 +20,6 @@ export default function ItineraryRoute() {
   const [selectedDay, setSelectedDay] = useState(trip.itinerary[0]?.id ?? '');
   const [detailsActivity, setDetailsActivity] = useState<Activity | undefined>();
   const day = trip.itinerary.find((item) => item.id === selectedDay) ?? trip.itinerary[0];
-  const restaurants = uniqueRestaurants(day?.activities.flatMap((activity) => activity.restaurants ?? []) ?? []);
   const tripVibe = trip.tripVibe?.trim() ?? '';
   const hasFewVibeMatches = Boolean(tripVibe && day && !day.restDay && day.activities.length < MIN_VIBE_MATCHED_PLACES);
 
@@ -59,12 +52,12 @@ export default function ItineraryRoute() {
     <Screen>
       <Header />
       <ScrollView>
-        <Container>
-          <Row style={{ alignItems: 'flex-start', flexDirection: isDesktop ? 'row' : 'column' }}>
+        <Container style={styles.itineraryContainer}>
+          <Row gap={spacing.lg} style={{ alignItems: 'flex-start', flexDirection: isDesktop ? 'row' : 'column' }}>
             {isDesktop ? <Sidebar /> : <MobileSummary />}
 
-            <Stack style={{ flex: 1, minWidth: 0 }} gap={spacing.lg}>
-              <Row wrap style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Stack style={styles.itineraryMain} gap={spacing.lg}>
+              <Row wrap gap={spacing.md} style={styles.pageHeader}>
                 <Stack gap={spacing.xs}>
                   <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
                     <Pressable onPress={() => router.push('/trip/create')}><Text style={styles.breadcrumb}><ArrowLeft size={14} color={colors.muted} /> Plan</Text></Pressable>
@@ -81,7 +74,7 @@ export default function ItineraryRoute() {
                   ) : null}
                 </Stack>
                 {!isMobile ? (
-                  <Row wrap>
+                  <Row wrap style={{ alignItems: 'center' }}>
                     <Button onPress={() => router.push('/trip/booking')} icon={<ArrowRight size={16} color={colors.surface} />}>Continue to booking</Button>
                   </Row>
                 ) : null}
@@ -107,7 +100,7 @@ export default function ItineraryRoute() {
               ) : hasFewVibeMatches && !day.activities.length ? (
                 <TripVibeNoMatches tripVibe={tripVibe} />
               ) : day.activities.length ? (
-                <Stack gap={spacing.sm}>
+                <Stack gap={spacing.md}>
                   {hasFewVibeMatches ? <TripVibeLowMatches tripVibe={tripVibe} count={day.activities.length} /> : null}
                   {day.activities.map((activity, index) => (
                     <View key={activity.id}>
@@ -115,7 +108,6 @@ export default function ItineraryRoute() {
                       <ActivityCard activity={activity} index={index} isMobile={isMobile} onDetails={() => setDetailsActivity(activity)} />
                     </View>
                   ))}
-                  {restaurants.length ? <NearbyRestaurants restaurants={restaurants} /> : null}
                 </Stack>
               ) : (
                 <EmptyDay />
@@ -143,7 +135,7 @@ function Sidebar() {
   const router = useRouter();
   const { trip, setPlannerInput } = useTrip();
   const editTripDetails = () => {
-    setPlannerInput({ source: trip.source.city, destination: trip.destination.city });
+    setPlannerInput({ source: trip.source.city, destination: trip.destination.city, tripVibe: trip.tripVibe });
     router.push('/trip/create');
   };
 
@@ -161,15 +153,6 @@ function Sidebar() {
           <SummaryRow icon={<CalendarDays size={16} color={colors.primary} />} label="Dates" value={`${formatDisplayDate(trip.startDate)} - ${formatDisplayDate(trip.endDate, true)}`} />
           <SummaryRow icon={<Moon size={16} color={colors.primary} />} label="Duration" value={`${trip.days} days`} />
           <SummaryRow icon={<Text style={styles.paceEmoji}>{paceIcon[trip.pace]}</Text>} label="Pace" value={paceLabel[trip.pace]} />
-          {trip.preferences.length ? (
-            <Row gap={spacing.sm} style={{ alignItems: 'flex-start' }}>
-              <Sparkles size={16} color={colors.primary} />
-              <Stack gap={spacing.xs} style={{ flex: 1 }}>
-                <Text style={styles.summaryLabelDark}>Interests</Text>
-                <Row wrap gap={spacing.xs}>{trip.preferences.map((pref) => <Chip key={pref} label={pref} />)}</Row>
-              </Stack>
-            </Row>
-          ) : null}
           {trip.tripVibe ? <SummaryRow icon={<Sparkles size={16} color={colors.accent} />} label="Trip vibe" value={trip.tripVibe} /> : null}
           <SummaryRow icon={<MapPin size={16} color={colors.primary} />} label="Starting from" value={trip.source.city || '-'} />
           <View style={styles.rule} />
@@ -228,15 +211,21 @@ function SummaryRow({ icon, label, value }: { icon: React.ReactNode; label: stri
 }
 
 function ActivityCard({ activity, index, isMobile, onDetails }: { activity: Activity; index: number; isMobile: boolean; onDetails: () => void }) {
-  const imageUrl = activity.imageUrl ?? fallbackImages[index % fallbackImages.length]!;
   return (
     <Row gap={spacing.md} style={{ alignItems: 'stretch' }}>
       {!isMobile ? <View style={styles.timelineDot}><Text style={styles.timelineNum}>{index + 1}</Text></View> : null}
       <Card style={styles.activityCard}>
         <View style={StyleSheet.flatten([styles.activityLayout, isMobile && { flexDirection: 'column' }])}>
           <View style={StyleSheet.flatten([styles.activityImageWrap, isMobile && styles.activityImageMobile])}>
-            <Image source={{ uri: imageUrl }} style={styles.activityImage} resizeMode="cover" />
-            <View style={styles.categoryBadge}><Text style={styles.categoryText}>{activity.category ?? 'Place'}</Text></View>
+            {activity.imageUrl ? (
+              <Image source={{ uri: activity.imageUrl }} style={styles.activityImage} resizeMode="cover" />
+            ) : (
+              <View style={styles.activityImagePlaceholder}>
+                <View style={styles.activityImageIcon}>
+                  <MapPin size={24} color={colors.primary} />
+                </View>
+              </View>
+            )}
           </View>
           <Stack style={styles.activityBody} gap={spacing.sm}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -245,15 +234,19 @@ function ActivityCard({ activity, index, isMobile, onDetails }: { activity: Acti
                 <Row gap={spacing.xs} wrap style={{ alignItems: 'center' }}>
                   <Star size={14} color="#FACC15" fill="#FACC15" />
                   <Text style={styles.ratingText}>{activity.rating}</Text>
-                  <Text style={styles.dotText}>·</Text>
                   <MapPin size={12} color={colors.muted} />
                   <Text style={styles.metaText}>{activity.area}</Text>
                 </Row>
               </Stack>
             </Row>
-            <Row wrap gap={spacing.md} style={{ alignItems: 'center' }}>
-              <Row gap={spacing.xs} style={{ alignItems: 'center' }}><Clock size={14} color={colors.primary} /><Text style={styles.metaText}>{activity.startTime} - {activity.endTime}</Text></Row>
-              <StatusPill>{activity.duration}</StatusPill>
+            <Row wrap gap={spacing.sm} style={{ alignItems: 'center' }}>
+              <View style={styles.activityTimePill}>
+                <Clock size={14} color={colors.primary} />
+                <Text style={styles.activityTimeText}>{activity.startTime} - {activity.endTime}</Text>
+              </View>
+              <View style={styles.activityDurationPill}>
+                <Text style={styles.activityDurationText}>{activity.duration}</Text>
+              </View>
             </Row>
             <Text style={styles.activityDescription}>{activity.description}</Text>
             <Row wrap gap={spacing.sm}>
@@ -308,6 +301,7 @@ function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
 
 function ActivityDetailsModal({ activity, onClose }: { activity?: Activity; onClose: () => void }) {
   if (!activity) return null;
+  const bestTimeLabel = activity.bestTimeOfDay || bestTimeFromLegacyCategory(activity.category) || `${activity.startTime} - ${activity.endTime}`;
   return (
     <AppModal visible title={activity.name} onClose={onClose}>
       {activity.imageUrl ? <Image source={{ uri: activity.imageUrl }} style={styles.detailsImage} resizeMode="cover" /> : null}
@@ -315,14 +309,30 @@ function ActivityDetailsModal({ activity, onClose }: { activity?: Activity; onCl
         <Row wrap style={{ alignItems: 'center' }}>
           <Star size={14} color="#FACC15" fill="#FACC15" />
           <Text style={styles.ratingText}>{activity.rating}</Text>
-          <Text style={styles.dotText}>·</Text>
-          <MapPin size={13} color={colors.muted} />
-          <Text style={styles.metaText}>{activity.area}</Text>
         </Row>
-        <Row wrap style={{ alignItems: 'center' }}>
-          <Clock size={14} color={colors.primary} />
-          <Text style={styles.metaText}>{activity.startTime} - {activity.endTime}</Text>
-          <StatusPill>{activity.duration}</StatusPill>
+        <Row gap={spacing.xs} style={{ alignItems: 'flex-start' }}>
+          <MapPin size={13} color={colors.muted} />
+          <Text style={styles.detailsAddress}>{activity.area}</Text>
+        </Row>
+        <Row wrap gap={spacing.sm}>
+          <View style={styles.detailMetric}>
+            <View style={styles.detailMetricIcon}>
+              <Sparkles size={14} color={colors.accent} />
+            </View>
+            <Stack gap={0} style={{ flex: 1 }}>
+              <Text style={styles.detailMetricLabel}>Best time to visit</Text>
+              <Text style={styles.detailMetricValue}>{bestTimeLabel}</Text>
+            </Stack>
+          </View>
+          <View style={styles.detailMetric}>
+            <View style={styles.detailMetricIcon}>
+              <Clock size={14} color={colors.primary} />
+            </View>
+            <Stack gap={0} style={{ flex: 1 }}>
+              <Text style={styles.detailMetricLabel}>Time required</Text>
+              <Text style={styles.detailMetricValue}>{activity.duration}</Text>
+            </Stack>
+          </View>
         </Row>
         <Text style={styles.detailsDescription}>{activity.description || 'No additional details were provided for this place.'}</Text>
       </Stack>
@@ -428,14 +438,10 @@ function formatDisplayDate(value: string, includeYear = false) {
   return new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', ...(includeYear ? { year: 'numeric' as const } : {}) });
 }
 
-function uniqueRestaurants(restaurants: Restaurant[]) {
-  const seen = new Set<string>();
-  return restaurants.filter((restaurant) => {
-    const key = restaurant.name.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+function bestTimeFromLegacyCategory(category?: string) {
+  if (!category) return undefined;
+  const value = category.trim();
+  return /^(early morning|morning|midday|afternoon|evening|night|late night)$/i.test(value) ? value : undefined;
 }
 
 function formatDistance(distanceMeters: number) {
@@ -443,12 +449,14 @@ function formatDistance(distanceMeters: number) {
 }
 
 const styles = StyleSheet.create({
-  sidebar: { width: 272, position: 'sticky' as never, top: 0 },
-  summaryCard: { padding: 0, overflow: 'hidden', borderRadius: radius.xl, borderColor: 'rgba(37,117,241,0.18)', backgroundColor: '#F8FBFF', ...shadow.card },
-  summaryBanner: { minHeight: 64, backgroundImage: 'linear-gradient(135deg, #17438D 0%, #2575F1 56%, #5EC8DF 100%)' as never, padding: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  itineraryContainer: { paddingTop: spacing.xl },
+  itineraryMain: { flex: 1, minWidth: 0 },
+  sidebar: { width: 292, position: 'sticky' as never, top: spacing.md, alignSelf: 'flex-start', maxHeight: 'calc(100vh - 24px)' as never, overflowY: 'auto' as never, paddingRight: spacing.xs },
+  summaryCard: { padding: 0, overflow: 'hidden', borderRadius: 14, borderColor: '#D7E7FF', backgroundColor: '#FBFDFF', ...shadow.card },
+  summaryBanner: { minHeight: 72, backgroundImage: 'linear-gradient(135deg, #092141 0%, #2575F1 58%, #5EC8DF 100%)' as never, padding: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   summaryLabel: { color: '#B6CEE1', textTransform: 'uppercase', fontSize: 10, fontWeight: '800' },
   summaryTitle: { color: colors.surface, fontWeight: '900' },
-  summaryBody: { padding: spacing.lg, backgroundColor: '#F8FBFF' },
+  summaryBody: { padding: spacing.lg, backgroundColor: '#FBFDFF' },
   summaryLabelDark: { color: colors.muted, textTransform: 'uppercase', fontSize: 10, fontWeight: '800', letterSpacing: 0.4 },
   summaryValue: { color: colors.text, fontSize: 12, fontWeight: '800' },
   paceEmoji: { fontSize: 14, lineHeight: 18 },
@@ -461,8 +469,9 @@ const styles = StyleSheet.create({
   progressText: { flex: 1, color: colors.muted, fontSize: 12 },
   progressTextDone: { flex: 1, color: colors.text, fontSize: 12, fontWeight: '800' },
   doneLabel: { color: colors.primary, fontSize: 10, fontWeight: '900' },
-  mobileSummary: { width: '100%', padding: spacing.md, borderRadius: radius.lg, borderColor: 'rgba(37,117,241,0.18)', backgroundColor: '#F8FBFF' },
+  mobileSummary: { width: '100%', padding: spacing.md, borderRadius: radius.lg, borderColor: '#D7E7FF', backgroundColor: '#F8FBFF' },
   mobileSummaryText: { color: colors.muted, fontSize: 12 },
+  pageHeader: { justifyContent: 'space-between', alignItems: 'flex-start', borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 16, backgroundImage: 'linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 58%, #FEF0EB 100%)' as never, padding: spacing.xl },
   pageTitle: { fontSize: 24, lineHeight: 31 },
   pageSub: { color: colors.muted, fontSize: 14 },
   vibeBadge: { alignSelf: 'flex-start', alignItems: 'center', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, backgroundColor: '#FFF7ED', paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
@@ -470,7 +479,7 @@ const styles = StyleSheet.create({
   breadcrumb: { color: colors.muted, fontSize: 12 },
   breadcrumbStrong: { color: colors.text, fontSize: 12, fontWeight: '800' },
   dayTabs: { gap: spacing.sm, paddingBottom: spacing.xs },
-  dayTab: { minWidth: 72, minHeight: 66, borderWidth: 2, borderColor: '#BFDBFE', borderRadius: 12, backgroundColor: '#F8FBFF', alignItems: 'center', justifyContent: 'center', padding: spacing.sm },
+  dayTab: { minWidth: 86, minHeight: 68, borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 12, backgroundColor: '#FBFDFF', alignItems: 'center', justifyContent: 'center', padding: spacing.sm },
   restDayTab: { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' },
   activeDayTab: { backgroundImage: 'linear-gradient(135deg, #2575F1 0%, #5EC8DF 100%)' as never, borderColor: colors.primary },
   dayText: { color: colors.text, fontWeight: '900', fontSize: 12 },
@@ -479,17 +488,26 @@ const styles = StyleSheet.create({
   activeDaySub: { color: '#BFDBFE', fontSize: 11 },
   timelineDot: { width: 31, height: 31, borderRadius: 999, backgroundImage: 'linear-gradient(135deg, #2575F1 0%, #F8691E 100%)' as never, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface, marginTop: spacing.lg },
   timelineNum: { color: colors.surface, fontWeight: '900', fontSize: 12 },
-  activityCard: { flex: 1, padding: 0, borderRadius: radius.xl, overflow: 'hidden', borderColor: '#D7E7FF', backgroundColor: '#FBFDFF' },
+  activityCard: { flex: 1, padding: 0, borderRadius: 14, overflow: 'hidden', borderColor: '#D7E7FF', backgroundColor: '#FBFDFF' },
   activityLayout: { flexDirection: 'row' },
-  activityImageWrap: { width: 148, minHeight: 176, position: 'relative', backgroundColor: colors.surfaceMuted },
+  activityImageWrap: { width: 156, minHeight: 184, position: 'relative', backgroundColor: colors.surfaceMuted },
   activityImageMobile: { width: '100%', height: 178 },
   activityImage: { width: '100%', height: '100%' },
-  categoryBadge: { position: 'absolute', left: spacing.sm, bottom: spacing.sm, borderRadius: 999, backgroundImage: 'linear-gradient(135deg, rgba(37,117,241,0.94), rgba(248,105,30,0.92))' as never, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  categoryText: { color: colors.surface, fontSize: 10, fontWeight: '900' },
+  activityImagePlaceholder: { width: '100%', height: '100%', minHeight: 176, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: '#F8FBFF', padding: spacing.md },
+  activityImageIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EBF2FE', borderWidth: 1, borderColor: '#BFDBFE' },
   activityBody: { flex: 1, minWidth: 0, padding: spacing.lg, backgroundImage: 'linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 100%)' as never },
-  activityTitle: { fontSize: 16, lineHeight: 21 },
+  activityTitle: { fontSize: 17, lineHeight: 23 },
   ratingText: { fontWeight: '800', fontSize: 12 },
   metaText: { color: colors.muted, fontSize: 12 },
+  detailsAddress: { color: colors.muted, fontSize: 12, flex: 1 },
+  activityTimePill: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 999, backgroundColor: '#EBF2FE', paddingHorizontal: spacing.md },
+  activityTimeText: { color: colors.primaryDark, fontSize: 12, fontWeight: '900' },
+  activityDurationPill: { minHeight: 34, justifyContent: 'center', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 999, backgroundColor: '#FFF7ED', paddingHorizontal: spacing.md },
+  activityDurationText: { color: colors.accent, fontSize: 12, fontWeight: '900' },
+  detailMetric: { minWidth: 180, flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: '#D7E7FF', borderRadius: radius.lg, backgroundColor: '#F8FBFF', padding: spacing.md },
+  detailMetricIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  detailMetricLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0 },
+  detailMetricValue: { color: colors.text, fontSize: 14, fontWeight: '900' },
   dotText: { color: colors.muted, fontSize: 12 },
   activityDescription: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   detailsButton: { backgroundColor: '#EBF2FE', borderColor: '#BFDBFE' },

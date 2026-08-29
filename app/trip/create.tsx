@@ -43,7 +43,7 @@ export default function PlannerRoute() {
   const [days, setDays] = useState(shouldPrefillTripDetails && trip.days ? String(trip.days) : '');
   const [pace, setPace] = useState<Pace>(shouldPrefillTripDetails ? trip.pace : 'balanced');
   const [preferences, setPreferences] = useState<string[]>(shouldPrefillTripDetails ? trip.preferences : []);
-  const [tripIdea, setTripIdea] = useState('');
+  const [tripIdea, setTripIdea] = useState(plannerInput.tripVibe ?? (shouldPrefillTripDetails ? trip.tripVibe ?? '' : ''));
   const [restOpen, setRestOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [restCalendarOpen, setRestCalendarOpen] = useState(false);
@@ -56,8 +56,16 @@ export default function PlannerRoute() {
   const todayIso = toIsoDate(new Date());
   const endDate = canChooseRestDays ? computeActiveEndDate(startDate, numericDays, restDays) : '';
 
+  function updateTripIdea(value: string) {
+    setTripIdea(value);
+    const matchedPreference = preferenceChips.find((pref) => pref === value.trim());
+    setPreferences(matchedPreference ? [matchedPreference] : []);
+  }
+
   function togglePref(pref: string) {
-    setPreferences((current) => current.includes(pref) ? current.filter((item) => item !== pref) : [...current, pref]);
+    const isSelected = preferences.includes(pref);
+    setPreferences(isSelected ? [] : [pref]);
+    setTripIdea(isSelected ? '' : pref);
   }
 
   async function generate() {
@@ -67,7 +75,8 @@ export default function PlannerRoute() {
     try {
       const activeDates = computeActiveDates(startDate, numericDays, restDays);
       const trimmedTripVibe = tripIdea.trim();
-      const prompt = [trimmedTripVibe, preferences.join(', ')].filter(Boolean).join('. ') || `Plan a trip to ${destination}.`;
+      const promptPreferences = preferences.filter((pref) => pref !== trimmedTripVibe);
+      const prompt = [trimmedTripVibe, promptPreferences.join(', ')].filter(Boolean).join('. ') || `Plan a trip to ${destination}.`;
       const itinerary = await generateItinerary({
         source,
         destination,
@@ -163,7 +172,7 @@ export default function PlannerRoute() {
                 <Row style={{ flexDirection: useWideForm ? 'row' : 'column', alignItems: 'stretch' }}>
                   <Stack style={StyleSheet.flatten([styles.colorPanelViolet, useWideForm ? { flex: 1 } : styles.fullWidth])} gap={spacing.md}>
                     <Row style={{ alignItems: 'center' }}><SectionTitle color="#A78BFA">Trip vibe</SectionTitle><Text style={styles.optional}>Optional</Text></Row>
-                    <TextInput accessibilityLabel="Trip vibe" value={tripIdea} onChangeText={setTripIdea} multiline placeholder="Describe your ideal trip - beaches, street food, temples, photography spots..." placeholderTextColor="rgba(90,100,128,0.5)" style={styles.textArea} />
+                    <TextInput accessibilityLabel="Trip vibe" value={tripIdea} onChangeText={updateTripIdea} multiline placeholder="Describe your ideal trip - beaches, street food, temples, photography spots..." placeholderTextColor="rgba(90,100,128,0.5)" style={styles.textArea} />
                   <Text style={{ color: colors.muted, fontSize: 13 }}>Or pick your interests:</Text>
                   <View style={styles.prefGrid}>
                     {preferenceChips.map((pref) => {

@@ -133,8 +133,11 @@ export default function LandingRoute() {
         <Container>
           <Stack gap={spacing.xl}>
             <Stack gap={spacing.sm}>
-              <Row style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                <Heading size="lg">Popular Destinations</Heading>
+              <Row wrap gap={spacing.md} style={styles.destinationsHeader}>
+                <Stack gap={spacing.xs}>
+                  <Text style={styles.sectionEyebrow}>Explore next</Text>
+                  <Heading size="lg">Popular Destinations</Heading>
+                </Stack>
                 {destinationsOverflow ? (
                   <Row gap={spacing.sm}>
                     <Pressable accessibilityRole="button" accessibilityLabel="Previous destinations" onPress={() => scrollDestinations('left')} style={styles.destinationArrow}>
@@ -199,14 +202,14 @@ const styles = StyleSheet.create({
   heroImage: { resizeMode: 'cover' },
   heroOverlayGradient: {
     ...StyleSheet.absoluteFillObject,
-    backgroundImage: 'linear-gradient(to right, rgba(15,35,55,0.82) 0%, rgba(15,35,55,0.55) 55%, rgba(15,35,55,0.15) 100%)' as never
+    backgroundImage: 'linear-gradient(110deg, rgba(9,33,65,0.9) 0%, rgba(23,67,141,0.66) 52%, rgba(9,33,65,0.2) 100%)' as never
   },
   heroStage: { minHeight: 520, justifyContent: 'center' },
   heroContainer: { paddingVertical: 64 },
   heroContent: { maxWidth: 580 },
   heroTitle: { color: colors.surface, fontSize: 58, lineHeight: 66 },
   heroAccent: { color: colors.cyan, fontSize: 58, lineHeight: 66, fontWeight: '800' },
-  heroCopy: { color: 'rgba(255,255,255,0.82)', fontSize: 18, lineHeight: 28, maxWidth: 460 },
+  heroCopy: { color: 'rgba(255,255,255,0.86)', fontSize: 18, lineHeight: 28, maxWidth: 460 },
   heroButton: {
     alignSelf: 'flex-start',
     marginTop: spacing.xl,
@@ -214,7 +217,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundImage: 'linear-gradient(135deg, #2575F1 0%, #4A90F2 100%)' as never,
+    backgroundImage: 'linear-gradient(135deg, #2575F1 0%, #5EC8DF 100%)' as never,
     shadowColor: '#000000',
     shadowOpacity: 0.18,
     shadowRadius: 12,
@@ -223,10 +226,10 @@ const styles = StyleSheet.create({
   },
   heroButtonHover: { shadowOpacity: 0.24, transform: [{ translateY: -2 }] },
   pressedButton: { opacity: 0.9, transform: [{ scale: 0.98 }] },
-  gradientButtonText: { color: colors.surface, fontWeight: '700', fontSize: 15, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
-  searchCard: { marginTop: -82, borderRadius: 16, padding: spacing.sm, borderWidth: 0, gap: spacing.sm, shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 30, shadowOffset: { width: 0, height: 20 }, elevation: 8 },
-  searchField: { flex: 1, minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 12, borderWidth: 1, borderColor: '#F3F4F6', borderRadius: 12 },
-  searchLabel: { color: '#6B7280', fontSize: 11, lineHeight: 15, fontWeight: '800', textTransform: 'uppercase' },
+  gradientButtonText: { color: colors.surface, fontWeight: '800', fontSize: 15, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
+  searchCard: { marginTop: -82, borderRadius: 16, padding: spacing.sm, borderWidth: 1, borderColor: '#D7E7FF', gap: spacing.sm, shadowColor: '#092141', shadowOpacity: 0.18, shadowRadius: 26, shadowOffset: { width: 0, height: 18 }, elevation: 8 },
+  searchField: { flex: 1, minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 12, borderWidth: 1, borderColor: '#E6EEF9', borderRadius: 12, backgroundColor: '#FBFDFF' },
+  searchLabel: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0 },
   searchInput: { minHeight: 30, color: '#1F2937', fontSize: 14, paddingVertical: 0, paddingHorizontal: spacing.sm },
   startButton: {
     minHeight: 56,
@@ -236,21 +239,23 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     margin: spacing.sm,
-    backgroundImage: 'linear-gradient(135deg, #F8691E 0%, #FF8C42 100%)' as never
+    backgroundImage: 'linear-gradient(135deg, #F8691E 0%, #2575F1 100%)' as never
   },
-  featuresBand: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  featuresBand: { backgroundColor: '#FBFDFF', borderBottomWidth: 1, borderBottomColor: '#D7E7FF' },
   featureItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.xl, borderColor: colors.border },
   featureItemDesktopDivider: { borderRightWidth: 1 },
   featureItemMobileDivider: { borderBottomWidth: 1 },
   featureIcon: { width: 48, height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  destinationsScroller: { gap: spacing.lg, paddingRight: spacing.xl },
-  destinationArrow: { width: 44, height: 44, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', shadowColor: '#092141', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  destinationCard: { width: 216, aspectRatio: 3 / 4, borderRadius: 16, overflow: 'hidden', backgroundColor: colors.primaryDark },
+  destinationsHeader: { alignItems: 'center', justifyContent: 'space-between' },
+  sectionEyebrow: { color: colors.primary, fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0 },
+  destinationsScroller: { gap: spacing.lg, paddingRight: spacing.xl, paddingBottom: spacing.xs },
+  destinationArrow: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: '#D7E7FF', backgroundColor: '#FBFDFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#092141', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  destinationCard: { width: 216, aspectRatio: 3 / 4, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.primaryDark, borderWidth: 1, borderColor: '#D7E7FF' },
   destinationCardMobile: { width: 230 },
   destinationImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   destinationImageHover: { transform: [{ scale: 1.05 }] },
   destinationFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '28%', backgroundImage: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.36) 52%, rgba(0,0,0,0) 100%)' as never },
-  destinationTag: { position: 'absolute', top: spacing.md, left: spacing.md, color: colors.surface, backgroundColor: 'rgba(26,95,114,0.85)', borderRadius: 999, overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, fontSize: 11, fontWeight: '800' },
+  destinationTag: { position: 'absolute', top: spacing.md, left: spacing.md, color: colors.surface, backgroundColor: 'rgba(37,117,241,0.88)', borderRadius: 999, overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, fontSize: 11, fontWeight: '900' },
   destinationInfo: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: spacing.lg, paddingTop: 72 },
   destinationName: { color: colors.surface, fontWeight: '800', fontSize: 15, marginTop: spacing.sm }
 });

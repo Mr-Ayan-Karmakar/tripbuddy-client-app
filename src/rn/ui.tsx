@@ -1,5 +1,5 @@
 import { createElement, ReactNode } from 'react';
-import { Image, ImageSourcePropType, ImageStyle, Modal as RNModal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text as RNText, TextInput, TextStyle, View, ViewStyle } from 'react-native';
+import { Image, ImageSourcePropType, ImageStyle, Modal as RNModal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text as RNText, TextInput, TextProps, TextStyle, View, ViewStyle } from 'react-native';
 import { X } from 'lucide-react-native';
 import { colors, radius, shadow, spacing } from './theme';
 import { useResponsive } from './useResponsive';
@@ -35,24 +35,24 @@ export function Row({ children, gap = spacing.md, wrap, style }: { children: Rea
   return <View style={StyleSheet.flatten([styles.row, { gap, flexWrap: wrap ? 'wrap' : 'nowrap' }, style])}>{children}</View>;
 }
 
-export function Text({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
-  return <RNText style={StyleSheet.flatten([styles.text, style])}>{children}</RNText>;
+export function Text({ children, style, numberOfLines, ellipsizeMode }: { children: ReactNode; style?: StyleProp<TextStyle>; numberOfLines?: TextProps['numberOfLines']; ellipsizeMode?: TextProps['ellipsizeMode'] }) {
+  return <RNText numberOfLines={numberOfLines} ellipsizeMode={ellipsizeMode} style={StyleSheet.flatten([styles.text, style])}>{children}</RNText>;
 }
 
-export function Heading({ children, size = 'lg', style }: { children: ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl'; style?: StyleProp<TextStyle> }) {
-  return <RNText style={StyleSheet.flatten([styles.heading, headingSizes[size], style])}>{children}</RNText>;
+export function Heading({ children, size = 'lg', style, numberOfLines, ellipsizeMode }: { children: ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl'; style?: StyleProp<TextStyle>; numberOfLines?: TextProps['numberOfLines']; ellipsizeMode?: TextProps['ellipsizeMode'] }) {
+  return <RNText numberOfLines={numberOfLines} ellipsizeMode={ellipsizeMode} style={StyleSheet.flatten([styles.heading, headingSizes[size], style])}>{children}</RNText>;
 }
 
 export function Card({ children, selected, style }: { children: ReactNode; selected?: boolean; style?: StyleProp<ViewStyle> }) {
   return <View style={StyleSheet.flatten([styles.card, selected && styles.selectedCard, style])}>{children}</View>;
 }
 
-export function Button({ children, onPress, variant = 'primary', icon, style }: { children: ReactNode; onPress?: () => void; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; icon?: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Button({ children, onPress, variant = 'primary', icon, style, disabled }: { children: ReactNode; onPress?: () => void; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; icon?: ReactNode; style?: StyleProp<ViewStyle>; disabled?: boolean }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => StyleSheet.flatten([styles.button, buttonStyles[variant], pressed && styles.pressed, style])}>
+    <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => StyleSheet.flatten([styles.button, buttonStyles[variant], disabled && styles.disabledButton, pressed && styles.pressed, style])}>
       <Row gap={spacing.sm} style={{ alignItems: 'center', justifyContent: 'center' }}>
         {icon}
-        <RNText style={StyleSheet.flatten([styles.buttonText, variant !== 'primary' && { color: buttonTextColors[variant] }])}>{children}</RNText>
+        <RNText style={StyleSheet.flatten([styles.buttonText, variant !== 'primary' && { color: buttonTextColors[variant] }, disabled && styles.disabledButtonText])}>{children}</RNText>
       </Row>
     </Pressable>
   );
@@ -151,6 +151,8 @@ const styles = StyleSheet.create({
   selectedCard: { borderColor: colors.primary, borderWidth: 2, backgroundColor: '#F4F8FF' },
   button: { minHeight: 44, borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: spacing.lg, justifyContent: 'center', alignItems: 'center' },
   buttonText: { color: colors.surface, fontWeight: '800', fontSize: 15, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
+  disabledButton: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, opacity: 0.72 },
+  disabledButtonText: { color: 'rgba(90,100,128,0.68)' },
   pressed: { opacity: 0.78 },
   input: { minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: spacing.md, color: colors.text, fontSize: 15, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
   textarea: { minHeight: 92, paddingTop: spacing.md, textAlignVertical: 'top' },

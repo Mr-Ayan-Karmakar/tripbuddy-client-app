@@ -27,6 +27,7 @@ export type Activity = {
   description: string;
   imageUrl?: string;
   category?: string;
+  bestTimeOfDay?: string;
   restaurants?: Restaurant[];
   reviews?: PlaceReview[];
   travelFromPrevious?: string;
@@ -68,6 +69,11 @@ export type TransportOption = {
   duration: string;
   stops: string;
   pricePerTraveler: number;
+  seatsAvailable?: number;
+  fromCode?: string;
+  toCode?: string;
+  transportName?: string;
+  transportNumber?: string;
   details: string;
 };
 
@@ -76,10 +82,12 @@ export type HotelOption = {
   name: string;
   area: string;
   rating: number;
+  reviewCount?: number;
+  reviewLabel?: string;
   pricePerNight: number;
   details: string;
   amenities: string[];
-  imageUrl: string;
+  imageUrl?: string;
 };
 
 export type TransportBooking = {

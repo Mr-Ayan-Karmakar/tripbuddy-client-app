@@ -1,4 +1,3 @@
-import { hotelOptions, transportOptions } from '../data';
 import { Activity, DayPlan, HotelOption, Pace, TransportOption, TransportType } from '../types';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
@@ -22,6 +21,34 @@ type AvailabilityDto = {
   currency: 'INR';
   details: string;
   externalId?: string;
+  rating?: number;
+  hotelDetails?: {
+    photoUrls?: string[];
+    reviewCount?: number;
+    reviewScore?: number;
+    reviewScoreWord?: string;
+  };
+  flightDetails?: Array<{
+    airline?: string;
+    flightNumber?: string;
+    from?: string;
+    to?: string;
+    departureTime?: string;
+    arrivalTime?: string;
+    durationMinutes?: number;
+  }>;
+  trainDetails?: {
+    trainNumber?: string;
+    trainName?: string;
+    fromStationCode?: string;
+    toStationCode?: string;
+    departureTime?: string;
+    arrivalTime?: string;
+    duration?: string;
+    availabilityStatus?: string;
+  };
+  totalDurationMinutes?: number;
+  stops?: number;
   source?: string;
 };
 
@@ -97,8 +124,9 @@ type ApiPlaceReview = {
 let tokens: Tokens | undefined;
 let tokenPromise: Promise<string> | undefined;
 
-export async function getAccessToken() {
-  if (tokens?.accessToken) return tokens.accessToken;
+export async function getAccessToken(forceRefresh = false) {
+  if (forceRefresh) tokens = undefined;
+  if (!forceRefresh && tokens?.accessToken) return tokens.accessToken;
   if (tokenPromise) return tokenPromise;
   tokenPromise = fetch(`${API_BASE_URL}/auth/api/guest`, { method: 'POST' })
     .then(async (response) => {
@@ -113,8 +141,8 @@ export async function getAccessToken() {
   return tokenPromise;
 }
 
-async function post<TResponse, TBody>(path: string, body: TBody): Promise<TResponse> {
-  const token = await getAccessToken();
+async function post<TResponse, TBody>(path: string, body: TBody, retryOnExpiredToken = true): Promise<TResponse> {
+  const token = await getAccessToken(!retryOnExpiredToken);
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
@@ -127,13 +155,20 @@ async function post<TResponse, TBody>(path: string, body: TBody): Promise<TRespo
   const payload = text ? JSON.parse(text) : undefined;
   if (!response.ok) {
     const message = typeof payload?.error === 'string' ? payload.error : response.statusText;
+    if (retryOnExpiredToken && response.status === 401 && message === 'Access token expired.') {
+      return post<TResponse, TBody>(path, body, false);
+    }
     throw new Error(message);
   }
   return payload as TResponse;
 }
 
 export async function generateItinerary(input: GenerateItineraryInput): Promise<DayPlan[]> {
-  const token = await getAccessToken();
+  return generateItineraryWithToken(input, true);
+}
+
+async function generateItineraryWithToken(input: GenerateItineraryInput, retryOnExpiredToken: boolean): Promise<DayPlan[]> {
+  const token = await getAccessToken(!retryOnExpiredToken);
   const response = await fetch(`${API_BASE_URL}/itinerary/api/stream`, {
     method: 'POST',
     headers: {
@@ -156,7 +191,11 @@ export async function generateItinerary(input: GenerateItineraryInput): Promise<
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(errorMessageFromText(text) ?? response.statusText);
+    const message = errorMessageFromText(text) ?? response.statusText;
+    if (retryOnExpiredToken && response.status === 401 && message === 'Access token expired.') {
+      return generateItineraryWithToken(input, false);
+    }
+    throw new Error(message);
   }
 
   const output = await readItineraryStream(response);
@@ -249,7 +288,8 @@ function mapItineraryActivity(activity: ApiItineraryActivity, dayNumber: number,
     duration,
     description: activity.notes ?? activity.description ?? '',
     imageUrl: activity.photoUrls?.[0],
-    category: activity.bestTimeOfDay ?? activity.city,
+    category: activity.city,
+    bestTimeOfDay: activity.bestTimeOfDay,
     reviews: (activity.reviews ?? []).map((review) => ({
       authorName: review.authorName,
       rating: review.rating,
@@ -294,43 +334,57 @@ function errorMessageFromText(value: string) {
 }
 
 export async function searchTransport(input: { source: string; destination: string; date: string; adults: number; children: number; type: TransportType }): Promise<TransportOption[]> {
-  try {
-    const result = await post<{ options: AvailabilityDto[] }, typeof input>('/booking/api/transport/availability', input);
-    const mapped = result.options.filter((option) => option.available).map((option, index) => ({
+  const result = await post<{ options: AvailabilityDto[] }, typeof input>('/booking/api/transport/availability', input);
+  return result.options.filter((option) => option.available).map((option, index) => {
+    const firstFlight = option.flightDetails?.[0];
+    const lastFlight = option.flightDetails?.at(-1);
+    const train = option.trainDetails;
+    const duration = train?.duration ?? formatDurationMinutes(option.totalDurationMinutes ?? firstFlight?.durationMinutes);
+    const transportNumber = train?.trainNumber ?? firstFlight?.flightNumber ?? option.externalId;
+    const transportName = train?.trainName ?? firstFlight?.airline ?? option.provider;
+    return {
       id: option.externalId ?? `${option.provider}-${index}`,
       provider: option.provider,
-      code: option.externalId ?? `${input.type.toUpperCase()}-${index + 1}`,
+      code: transportNumber ?? `${input.type.toUpperCase()}-${index + 1}`,
       type: input.type,
-      departureTime: 'TBD',
-      arrivalTime: 'TBD',
-      duration: 'Provider timed',
-      stops: `${option.seatsOrRooms} seats`,
+      departureTime: train?.departureTime ?? firstFlight?.departureTime ?? 'TBD',
+      arrivalTime: train?.arrivalTime ?? lastFlight?.arrivalTime ?? 'TBD',
+      duration: duration ?? 'Provider timed',
+      stops: typeof option.stops === 'number' ? `${option.stops} stop${option.stops === 1 ? '' : 's'}` : input.type === 'train' ? (train?.availabilityStatus ?? 'Available') : 'Available',
       pricePerTraveler: option.price,
+      seatsAvailable: option.seatsOrRooms,
+      fromCode: train?.fromStationCode ?? firstFlight?.from ?? input.source,
+      toCode: train?.toStationCode ?? lastFlight?.to ?? input.destination,
+      transportName,
+      transportNumber,
       details: option.details
-    }));
-    return mapped.length ? mapped : transportOptions.filter((option) => option.type === input.type);
-  } catch {
-    return transportOptions.filter((option) => option.type === input.type);
-  }
+    };
+  });
+}
+
+function formatDurationMinutes(value?: number) {
+  if (!Number.isFinite(value)) return undefined;
+  const minutes = Number(value);
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (!hours) return `${remainingMinutes}m`;
+  return `${hours}h ${remainingMinutes}m`;
 }
 
 export async function searchHotels(input: { city: string; checkIn: string; checkOut: string; adults: number; children: number; rooms: number }): Promise<HotelOption[]> {
-  try {
-    const result = await post<{ options: AvailabilityDto[] }, typeof input>('/booking/api/hotel/availability', input);
-    const mapped = result.options.filter((option) => option.available).map((option, index) => ({
-      id: option.externalId ?? `${option.provider}-${index}`,
-      name: option.provider,
-      area: option.source ?? input.city,
-      rating: 4.2,
-      pricePerNight: option.price,
-      details: option.details,
-      amenities: ['Provider availability', `${option.seatsOrRooms} room${option.seatsOrRooms === 1 ? '' : 's'}`],
-      imageUrl: hotelOptions[index % hotelOptions.length]?.imageUrl ?? hotelOptions[0]!.imageUrl
-    }));
-    return mapped.length ? mapped : hotelOptions;
-  } catch {
-    return hotelOptions;
-  }
+  const result = await post<{ options: AvailabilityDto[] }, typeof input>('/booking/api/hotel/availability', input);
+  return result.options.filter((option) => option.available).map((option, index) => ({
+    id: option.externalId ?? `${option.provider}-${index}`,
+    name: option.provider,
+    area: option.source ?? input.city,
+    rating: option.rating ?? option.hotelDetails?.reviewScore ?? 0,
+    reviewCount: option.hotelDetails?.reviewCount,
+    reviewLabel: option.hotelDetails?.reviewScoreWord,
+    pricePerNight: option.price,
+    details: option.details,
+    amenities: ['Provider availability', `${option.seatsOrRooms} room${option.seatsOrRooms === 1 ? '' : 's'}`],
+    imageUrl: option.hotelDetails?.photoUrls?.[0]
+  }));
 }
 
 export async function completeBookings(input: { transport: TransportOption[]; hotels: HotelOption[]; travelers: Array<{ fullName: string; age: number }>; source: string; destination: string; date: string; city: string; checkIn: string; checkOut: string; adults: number; children: number }) {

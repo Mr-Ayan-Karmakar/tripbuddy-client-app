@@ -14,12 +14,12 @@ export function Header() {
   const pageNav = [
     { label: 'Home', href: '/' },
     { label: 'My Trips', href: '/trips' },
-    { label: 'Bookings', href: '/trip/booking' }
+    { label: 'Bookings', href: '/bookings' }
   ] as const;
   const serviceNav = [
-    { label: 'Flights', href: '/trip/booking', icon: Plane },
-    { label: 'Trains', href: '/trip/booking', icon: Train },
-    { label: 'Hotels', href: '/trip/booking', icon: Hotel }
+    { label: 'Flights', href: '/bookings', icon: Plane },
+    { label: 'Trains', href: '/bookings', icon: Train },
+    { label: 'Hotels', href: '/bookings', icon: Hotel }
   ] as const;
 
   return (
@@ -98,7 +98,7 @@ export function Header() {
             { label: 'Trains', icon: Train },
             { label: 'Hotels', icon: Hotel }
           ].map(({ label, icon: Icon }) => (
-            <Link key={label} href="/trip/booking" asChild>
+            <Link key={label} href="/bookings" asChild>
               <Pressable style={styles.mobileServiceItem}>
                 <Icon size={15} color={colors.muted} />
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '700' }}>{label}</Text>
@@ -114,8 +114,6 @@ export function Header() {
 export function Footer() {
   const footerLinks = [
     { label: 'About Us', onPress: () => Linking.openURL('https://www.kreativo.co.in/#about') },
-    { label: 'Privacy' },
-    { label: 'Terms' },
     { label: 'Contact', onPress: () => Linking.openURL('https://kreativo.co.in/#contact') }
   ];
 
@@ -141,7 +139,7 @@ export function Footer() {
             {footerLinks.map((link) => (
               <Pressable
                 key={link.label}
-                accessibilityRole={link.onPress ? 'link' : undefined}
+                accessibilityRole="link"
                 onPress={link.onPress}
                 style={styles.footerLink}
               >

@@ -6,8 +6,8 @@ import { DayPlan, HotelOption, Pace, SavedTrip, TransportOption, Traveler, Trip 
 type TripContextValue = {
   trip: Trip;
   savedTrips: SavedTrip[];
-  plannerInput: { source: string; destination: string };
-  setPlannerInput: (input: { source: string; destination: string }) => void;
+  plannerInput: { source: string; destination: string; tripVibe?: string };
+  setPlannerInput: (input: { source: string; destination: string; tripVibe?: string }) => void;
   setDraft: (input: { source: string; destination: string; startDate: string; days: number; pace: Pace; preferences: string[]; preferenceText: string; endDate?: string; itinerary?: DayPlan[] }) => void;
   selectSavedTrip: (id: string) => void;
   deleteSavedTrip: (id: string) => void;
@@ -28,7 +28,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [trip, setTrip] = useState(createDefaultTrip);
   const [savedTrips, setSavedTrips] = useState<SavedTrip[]>(loadSavedTrips);
   const [currentTripId, setCurrentTripId] = useState('');
-  const [plannerInput, setPlannerInput] = useState({ source: '', destination: '' });
+  const [plannerInput, setPlannerInput] = useState<{ source: string; destination: string; tripVibe?: string }>({ source: '', destination: '' });
 
   useEffect(() => {
     saveTripsToStorage(savedTrips);
