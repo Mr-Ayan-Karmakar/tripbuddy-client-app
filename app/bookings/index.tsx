@@ -1,5 +1,6 @@
+import { Link } from 'expo-router';
 import { CalendarDays, Hotel, Plane, Train } from 'lucide-react-native';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Footer, Header } from '../../src/rn/chrome';
 import { colors, spacing } from '../../src/rn/theme';
 import { Card, Chip, Container, Heading, Row, Screen, Stack, Text } from '../../src/rn/ui';
@@ -34,10 +35,16 @@ export default function BookingsRoute() {
                 <View style={styles.iconBubble}><Hotel size={20} color={colors.cyan} /></View>
               </View>
               <Heading size="md">No standalone bookings yet</Heading>
-              <Text style={styles.emptyText}>A booking-history API is not available yet. Once the backend exposes a list endpoint, this page can fetch direct flight, train, and hotel bookings here.</Text>
+              <Text style={styles.emptyText}>Direct bookings made outside trip planning will appear here when standalone booking history is available.</Text>
               <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
                 <CalendarDays size={14} color={colors.muted} />
-                <Text style={styles.metaText}>Trip-specific booking remains under each saved trip.</Text>
+                <Text style={styles.metaText}>Trip-planning bookings stay inside</Text>
+                <Link href="/trips" asChild>
+                  <Pressable accessibilityRole="link">
+                    <Text style={styles.metaLink}>My Trips</Text>
+                  </Pressable>
+                </Link>
+                <Text style={styles.metaText}>.</Text>
               </Row>
             </Card>
           </Stack>
@@ -57,5 +64,6 @@ const styles = StyleSheet.create({
   iconRow: { flexDirection: 'row', gap: spacing.sm },
   iconBubble: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EBF2FE' },
   emptyText: { color: colors.muted, textAlign: 'center', maxWidth: 520 },
-  metaText: { color: colors.muted, fontSize: 13 }
+  metaText: { color: colors.muted, fontSize: 13 },
+  metaLink: { color: colors.primary, fontSize: 13, fontWeight: '900' }
 });

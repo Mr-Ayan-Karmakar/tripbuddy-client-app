@@ -97,6 +97,7 @@ function TripCard({ trip, onView, onDelete }: { trip: SavedTrip; onView: () => v
     : transportSelected || hotelsSelected
       ? 'Booking in progress'
       : 'Itinerary ready';
+  const viewLabel = status === 'Itinerary ready' ? 'View itinerary' : 'Review booking';
 
   return (
     <Card style={styles.tripCard}>
@@ -134,7 +135,7 @@ function TripCard({ trip, onView, onDelete }: { trip: SavedTrip; onView: () => v
           </View>
           <Row gap={spacing.sm} style={styles.actionRow}>
             <Button variant="danger" onPress={onDelete} style={styles.actionButton} icon={<Trash2 size={16} color={colors.danger} />}>Delete</Button>
-            <Button onPress={onView} style={styles.actionButton} icon={<ArrowRight size={16} color={colors.surface} />}>View</Button>
+            <Button onPress={onView} style={styles.actionButton} icon={<ArrowRight size={16} color={colors.surface} />}>{viewLabel}</Button>
           </Row>
         </Stack>
       </Row>

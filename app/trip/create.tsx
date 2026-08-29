@@ -39,9 +39,9 @@ export default function PlannerRoute() {
   const shouldPrefillTripDetails = !hasPlannerInput || plannerInputMatchesTrip;
   const [source, setSource] = useState(plannerInput.source || (shouldPrefillTripDetails ? trip.source.city : ''));
   const [destination, setDestination] = useState(plannerInput.destination || (shouldPrefillTripDetails ? trip.destination.city : ''));
-  const [startDate, setStartDate] = useState(shouldPrefillTripDetails ? trip.startDate : '');
-  const [days, setDays] = useState(shouldPrefillTripDetails && trip.days ? String(trip.days) : '');
-  const [pace, setPace] = useState<Pace>(shouldPrefillTripDetails ? trip.pace : 'balanced');
+  const [startDate, setStartDate] = useState(plannerInput.startDate ?? (shouldPrefillTripDetails ? trip.startDate : ''));
+  const [days, setDays] = useState(plannerInput.days ? String(plannerInput.days) : shouldPrefillTripDetails && trip.days ? String(trip.days) : '');
+  const [pace, setPace] = useState<Pace>(plannerInput.pace ?? (shouldPrefillTripDetails ? trip.pace : 'balanced'));
   const [preferences, setPreferences] = useState<string[]>(shouldPrefillTripDetails ? trip.preferences : []);
   const [tripIdea, setTripIdea] = useState(plannerInput.tripVibe ?? (shouldPrefillTripDetails ? trip.tripVibe ?? '' : ''));
   const [restOpen, setRestOpen] = useState(false);

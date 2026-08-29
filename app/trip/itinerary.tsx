@@ -22,6 +22,8 @@ export default function ItineraryRoute() {
   const day = trip.itinerary.find((item) => item.id === selectedDay) ?? trip.itinerary[0];
   const tripVibe = trip.tripVibe?.trim() ?? '';
   const hasFewVibeMatches = Boolean(tripVibe && day && !day.restDay && day.activities.length < MIN_VIBE_MATCHED_PLACES);
+  const hasBookingProgress = [...trip.transportBookings, ...trip.stayBookings].some((booking) => booking.status === 'Selected' || booking.status === 'Booked');
+  const bookingCtaLabel = hasBookingProgress ? 'Review bookings' : 'Continue to booking';
 
   useEffect(() => {
     if (!trip.itinerary.length) return;
@@ -75,7 +77,7 @@ export default function ItineraryRoute() {
                 </Stack>
                 {!isMobile ? (
                   <Row wrap style={{ alignItems: 'center' }}>
-                    <Button onPress={() => router.push('/trip/booking')} icon={<ArrowRight size={16} color={colors.surface} />}>Continue to booking</Button>
+                    <Button onPress={() => router.push('/trip/booking')} icon={<ArrowRight size={16} color={colors.surface} />}>{bookingCtaLabel}</Button>
                   </Row>
                 ) : null}
               </Row>
@@ -121,7 +123,7 @@ export default function ItineraryRoute() {
       {isMobile ? (
         <View style={styles.mobileCta}>
           <Pressable onPress={() => router.push('/trip/booking')} style={styles.mobileCtaButton}>
-            <Text style={styles.mobileCtaText}>Continue to booking</Text>
+            <Text style={styles.mobileCtaText}>{bookingCtaLabel}</Text>
             <ArrowRight size={16} color={colors.surface} />
           </Pressable>
         </View>
@@ -135,7 +137,7 @@ function Sidebar() {
   const router = useRouter();
   const { trip, setPlannerInput } = useTrip();
   const editTripDetails = () => {
-    setPlannerInput({ source: trip.source.city, destination: trip.destination.city, tripVibe: trip.tripVibe });
+    setPlannerInput({ source: trip.source.city, destination: trip.destination.city, startDate: trip.startDate, days: trip.days, pace: trip.pace, tripVibe: trip.tripVibe });
     router.push('/trip/create');
   };
 
@@ -159,18 +161,42 @@ function Sidebar() {
           <Button variant="secondary" onPress={editTripDetails} icon={<Edit3 size={16} color={colors.primary} />}>Edit trip details</Button>
         </Stack>
       </Card>
-      <Card style={styles.progressCard}>
-        <Text style={styles.progressTitle}>Planning progress</Text>
-        {['Itinerary', 'Hotels', 'Transports'].map((step, index) => (
-          <Row key={step} style={{ alignItems: 'center' }}>
-            <View style={StyleSheet.flatten([styles.progressDot, index === 0 && styles.progressDone])}>{index === 0 ? <Check size={11} color={colors.surface} /> : <Text style={styles.progressNum}>{index + 1}</Text>}</View>
-            <Text style={index === 0 ? styles.progressTextDone : styles.progressText}>{step}</Text>
-            {index === 0 ? <Text style={styles.doneLabel}>Done</Text> : null}
-          </Row>
-        ))}
-      </Card>
+      <PlanningProgress />
     </Stack>
   );
+}
+
+function PlanningProgress() {
+  const { trip } = useTrip();
+  const steps = [
+    { label: 'Itinerary', status: trip.itinerary.length ? 'Done' : 'Pending', done: trip.itinerary.length > 0 },
+    bookingProgressStep('Hotels', trip.stayBookings),
+    bookingProgressStep('Transports', trip.transportBookings)
+  ];
+
+  return (
+    <Card style={styles.progressCard}>
+      <Text style={styles.progressTitle}>Planning progress</Text>
+      {steps.map((step, index) => (
+        <Row key={step.label} style={{ alignItems: 'center' }}>
+          <View style={StyleSheet.flatten([styles.progressDot, step.done && styles.progressDone])}>
+            {step.done ? <Check size={11} color={colors.surface} /> : <Text style={styles.progressNum}>{index + 1}</Text>}
+          </View>
+          <Text style={step.done ? styles.progressTextDone : styles.progressText}>{step.label}</Text>
+          <Text style={step.done ? styles.doneLabel : styles.pendingLabel}>{step.status}</Text>
+        </Row>
+      ))}
+    </Card>
+  );
+}
+
+function bookingProgressStep(label: string, bookings: Array<{ status: string }>) {
+  if (!bookings.length) return { label, status: 'Pending', done: false };
+  if (bookings.every((booking) => booking.status === 'Booked')) return { label, status: 'Booked', done: true };
+  if (bookings.some((booking) => booking.status === 'Booked')) return { label, status: 'Part booked', done: true };
+  if (bookings.every((booking) => booking.status === 'Selected')) return { label, status: 'Selected', done: true };
+  if (bookings.some((booking) => booking.status === 'Selected')) return { label, status: 'Part selected', done: true };
+  return { label, status: 'Pending', done: false };
 }
 
 function MobileSummary() {
@@ -469,6 +495,7 @@ const styles = StyleSheet.create({
   progressText: { flex: 1, color: colors.muted, fontSize: 12 },
   progressTextDone: { flex: 1, color: colors.text, fontSize: 12, fontWeight: '800' },
   doneLabel: { color: colors.primary, fontSize: 10, fontWeight: '900' },
+  pendingLabel: { color: colors.muted, fontSize: 10, fontWeight: '900' },
   mobileSummary: { width: '100%', padding: spacing.md, borderRadius: radius.lg, borderColor: '#D7E7FF', backgroundColor: '#F8FBFF' },
   mobileSummaryText: { color: colors.muted, fontSize: 12 },
   pageHeader: { justifyContent: 'space-between', alignItems: 'flex-start', borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 16, backgroundImage: 'linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 58%, #FEF0EB 100%)' as never, padding: spacing.xl },

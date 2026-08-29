@@ -1,8 +1,9 @@
-import { BedDouble, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, CreditCard, ExternalLink, Filter, Mail, MapPin, Plane, Plus, Star, Train, User } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ArrowRight, BedDouble, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, ExternalLink, Filter, Mail, MapPin, Plane, Plus, Star, Train, User } from 'lucide-react-native';
 import { createElement, type ChangeEvent, type CSSProperties, type ReactNode, useRef, useState, useEffect, useMemo } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Footer, Header } from '../../src/rn/chrome';
-import { completeBookings, searchHotels, searchTransport } from '../../src/rn/services/api';
+import { searchHotels, searchTransport } from '../../src/rn/services/api';
 import { daysBetween, formatInr } from '../../src/rn/data';
 import { colors, spacing } from '../../src/rn/theme';
 import { AppModal, Button, Card, Chip, Container, Heading, Input, Row, Screen, Stack, StatusPill, Text } from '../../src/rn/ui';
@@ -22,11 +23,21 @@ type HotelSearchState = {
   checkOut: string;
 };
 
+type HotelFilterState = {
+  area?: string;
+  maxPrice?: number;
+  minRating?: number;
+  breakfastOnly: boolean;
+};
+
 export default function BookingRoute() {
+  const router = useRouter();
   const { isDesktop } = useResponsive();
-  const { trip, addTraveler, removeTraveler, updateOrganizerEmail, selectTransport, addReturnTransport, selectHotel, addStay, markBooked } = useTrip();
+  const { trip, addTraveler, removeTraveler, updateOrganizerEmail, selectTransport, addReturnTransport, selectHotel, markBooked, setPlannerInput } = useTrip();
   const [travelerOpen, setTravelerOpen] = useState(false);
+  const [finishedBookingOpen, setFinishedBookingOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [hotelFilters, setHotelFilters] = useState<HotelFilterState>({ breakfastOnly: false });
   const [travelerName, setTravelerName] = useState('');
   const [travelerAge, setTravelerAge] = useState('');
   const [transportType, setTransportType] = useState<TransportType>('flight');
@@ -65,6 +76,8 @@ export default function BookingRoute() {
     const hotels = trip.stayBookings.reduce((sum, booking) => sum + (booking.selectedHotel ? booking.selectedHotel.pricePerNight * daysBetween(booking.checkIn, booking.checkOut) : 0), 0);
     return transport + hotels;
   }, [bookingTravelers.length, trip.stayBookings, trip.transportBookings]);
+  const activeHotelFilterLabels = hotelFilterLabels(hotelFilters);
+  const availableHotelAreas = useMemo(() => hotelAreas(hotelResults), [hotelResults]);
 
   function submitTraveler() {
     const age = Number(travelerAge);
@@ -117,6 +130,7 @@ export default function BookingRoute() {
     try {
       const options = await searchHotels({ city: criteria.city.trim(), checkIn: criteria.checkIn.trim(), checkOut: criteria.checkOut.trim(), adults, children, rooms });
       setHotelResults((current) => ({ ...current, [bookingId]: options }));
+      setHotelFilters((current) => current.area && !options.some((hotel) => hotel.area === current.area) ? { ...current, area: undefined } : current);
     } catch (error) {
       setHotelResults((current) => ({ ...current, [bookingId]: [] }));
       setHotelErrors((current) => ({ ...current, [bookingId]: error instanceof Error ? error.message : 'Unable to load hotel options.' }));
@@ -125,35 +139,34 @@ export default function BookingRoute() {
     }
   }
 
-  async function complete() {
-    if (!canBook) {
-      setMessage('Organizer email is required before booking.');
-      return;
-    }
-    if (!hasTraveler) {
-      setMessage('At least 1 traveler is required before booking.');
-      return;
-    }
-    setMessage('Booking selected options...');
-    try {
-      await completeBookings({
-        transport: trip.transportBookings.map((booking) => booking.selectedOption).filter(Boolean) as TransportOption[],
-        hotels: trip.stayBookings.map((booking) => booking.selectedHotel).filter(Boolean) as HotelOption[],
-        travelers: bookingTravelers.map((traveler) => ({ fullName: traveler.fullName, age: traveler.age })),
-        source: trip.source.city,
-        destination: trip.destination.city,
-        date: trip.startDate,
-        city: trip.destination.city,
-        checkIn: trip.startDate,
-        checkOut: trip.endDate,
-        adults,
-        children
-      });
-      markBooked();
-      setMessage('Selected bookings are confirmed.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Booking failed.');
-    }
+  function finishBooking() {
+    if (!canConfirmBooking) return;
+    setFinishedBookingOpen(true);
+  }
+
+  function regenerateFromBookingDates() {
+    const bookingDates = bookingDateWindow();
+    markBooked();
+    setFinishedBookingOpen(false);
+    setPlannerInput({ source: trip.source.city, destination: trip.destination.city, startDate: bookingDates.startDate, days: bookingDates.days, pace: trip.pace, tripVibe: trip.tripVibe });
+    router.push('/trip/create');
+  }
+
+  function goToMyTrips() {
+    markBooked();
+    setFinishedBookingOpen(false);
+    router.push('/trips');
+  }
+
+  function bookingDateWindow() {
+    const dates = [
+      ...trip.transportBookings.map((booking) => transportSearch[booking.id]?.date ?? booking.date),
+      ...trip.stayBookings.flatMap((booking) => [hotelSearch[booking.id]?.checkIn ?? booking.checkIn, hotelSearch[booking.id]?.checkOut ?? booking.checkOut])
+    ].filter(isIsoDate);
+    const sortedDates = dates.sort();
+    const startDate = sortedDates[0] ?? trip.startDate;
+    const endDate = sortedDates.at(-1) ?? trip.endDate;
+    return { startDate, days: Math.max(1, daysBetween(startDate, endDate)) };
   }
 
   return (
@@ -198,9 +211,9 @@ export default function BookingRoute() {
             <Row gap={spacing.lg} style={{ flexDirection: isDesktop ? 'row' : 'column', alignItems: 'flex-start' }}>
               <Stack gap={spacing.lg} style={styles.bookingMain}>
                 <Card style={StyleSheet.flatten([styles.bookingSection, styles.organizerCard])}>
-                  <Row style={styles.sectionHeader}>
+                  <Row style={styles.organizerHeader}>
                     <View style={styles.avatar}><Mail size={20} color={colors.primary} /></View>
-                    <Stack gap={0}>
+                    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
                       <Heading size="md">Organizer contact</Heading>
                       <Text style={{ color: colors.muted }}>Required for booking confirmations and tickets.</Text>
                     </Stack>
@@ -255,32 +268,38 @@ export default function BookingRoute() {
                 </Card>
 
                 <Card style={styles.bookingSection}>
-                  <Row wrap style={styles.sectionHeader}><Stack><Heading size="md">Stay</Heading><Text style={{ color: colors.muted }}>{trip.destination.city} · {trip.startDate} to {trip.endDate}</Text></Stack><Button variant="secondary" onPress={() => setFiltersOpen(true)} icon={<Filter size={16} color={colors.text} />}>Filters</Button></Row>
-                  <Row wrap><Chip label="Area" /><Chip label="Price" /><Chip label="Rating" /><Chip label="Amenities" /></Row>
-                  {trip.stayBookings.map((booking) => (
-                    <Stack key={booking.id}>
-                      <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.stayName}</Text><Text style={{ color: colors.muted }}>{booking.city.city} · {booking.checkIn} to {booking.checkOut}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
-                      <View style={styles.searchGrid}>
-                        <Input label="Destination" value={hotelSearch[booking.id]?.city ?? booking.city.city} onChangeText={(value) => updateHotelSearch(booking.id, { city: value })} placeholder="City or destination" style={styles.searchInput} />
-                        <Input label="Check-in" value={hotelSearch[booking.id]?.checkIn ?? trip.startDate} onChangeText={(value) => updateHotelSearch(booking.id, { checkIn: value })} placeholder="YYYY-MM-DD" style={styles.searchInput} />
-                        <Input label="Check-out" value={hotelSearch[booking.id]?.checkOut ?? trip.endDate} onChangeText={(value) => updateHotelSearch(booking.id, { checkOut: value })} placeholder="YYYY-MM-DD" style={styles.searchInput} />
-                        <Button onPress={() => searchHotelOptions(booking.id, booking.rooms)} disabled={!hasTraveler || hotelLoading[booking.id]} style={styles.searchButton}>{hotelLoading[booking.id] ? 'Searching...' : 'Search'}</Button>
-                      </View>
-                      {hotelErrors[booking.id] ? <AvailabilityMessage tone="danger">{hotelErrors[booking.id]}</AvailabilityMessage> : null}
-                      {!hasTraveler ? <AvailabilityMessage tone="danger">Add at least 1 traveler to search and view available hotel options.</AvailabilityMessage> : null}
-                      {hasTraveler && !hotelErrors[booking.id] && !hotelSearched[booking.id] ? <AvailabilityMessage>Adjust the destination or stay dates, then search live hotel availability.</AvailabilityMessage> : null}
-                      {hasTraveler && !hotelErrors[booking.id] && hotelLoading[booking.id] ? <AvailabilityMessage>Checking live hotel availability...</AvailabilityMessage> : null}
-                      {hasTraveler && !hotelErrors[booking.id] && !hotelLoading[booking.id] && (hotelResults[booking.id] ?? []).length ? <Row wrap>{(hotelResults[booking.id] ?? []).map((hotel) => <HotelCard key={hotel.id} hotel={hotel} selected={booking.selectedHotel?.id === hotel.id} nights={daysBetween(hotelSearch[booking.id]?.checkIn ?? booking.checkIn, hotelSearch[booking.id]?.checkOut ?? booking.checkOut)} canBook={canConfirmBooking} onSelect={() => selectHotel(booking.id, hotel)} />)}</Row> : null}
-                      {hasTraveler && !hotelErrors[booking.id] && hotelSearched[booking.id] && !hotelLoading[booking.id] && !(hotelResults[booking.id] ?? []).length ? <AvailabilityMessage>No hotels returned by the booking API for this stay.</AvailabilityMessage> : null}
-                    </Stack>
-                  ))}
-                  <Button variant="secondary" onPress={addStay}>Add another stay</Button>
+                  <Row wrap style={styles.sectionHeader}><Stack><Heading size="md">Stay</Heading><Text style={{ color: colors.muted }}>{trip.destination.city} · {trip.startDate} to {trip.endDate}</Text></Stack><Button variant="secondary" onPress={() => setFiltersOpen(true)} icon={<Filter size={16} color={colors.text} />}>Filters{activeHotelFilterLabels.length ? ` (${activeHotelFilterLabels.length})` : ''}</Button></Row>
+                  <Row wrap>
+                    {(activeHotelFilterLabels.length ? activeHotelFilterLabels : ['All hotels']).map((label) => <Chip key={label} label={label} selected={activeHotelFilterLabels.length > 0} onPress={() => setFiltersOpen(true)} />)}
+                  </Row>
+                  {trip.stayBookings.map((booking) => {
+                    const results = hotelResults[booking.id] ?? [];
+                    const filteredResults = filterHotels(results, hotelFilters);
+                    return (
+                      <Stack key={booking.id}>
+                        <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.stayName}</Text><Text style={{ color: colors.muted }}>{booking.city.city} · {booking.checkIn} to {booking.checkOut}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
+                        <View style={styles.searchGrid}>
+                          <Input label="Destination" value={hotelSearch[booking.id]?.city ?? booking.city.city} onChangeText={(value) => updateHotelSearch(booking.id, { city: value })} placeholder="City or destination" style={styles.searchInput} />
+                          <Input label="Check-in" value={hotelSearch[booking.id]?.checkIn ?? trip.startDate} onChangeText={(value) => updateHotelSearch(booking.id, { checkIn: value })} placeholder="YYYY-MM-DD" style={styles.searchInput} />
+                          <Input label="Check-out" value={hotelSearch[booking.id]?.checkOut ?? trip.endDate} onChangeText={(value) => updateHotelSearch(booking.id, { checkOut: value })} placeholder="YYYY-MM-DD" style={styles.searchInput} />
+                          <Button onPress={() => searchHotelOptions(booking.id, booking.rooms)} disabled={!hasTraveler || hotelLoading[booking.id]} style={styles.searchButton}>{hotelLoading[booking.id] ? 'Searching...' : 'Search'}</Button>
+                        </View>
+                        {hotelErrors[booking.id] ? <AvailabilityMessage tone="danger">{hotelErrors[booking.id]}</AvailabilityMessage> : null}
+                        {!hasTraveler ? <AvailabilityMessage tone="danger">Add at least 1 traveler to search and view available hotel options.</AvailabilityMessage> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && !hotelSearched[booking.id] ? <AvailabilityMessage>Adjust the destination or stay dates, then search live hotel availability.</AvailabilityMessage> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && hotelLoading[booking.id] ? <AvailabilityMessage>Checking live hotel availability...</AvailabilityMessage> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && !hotelLoading[booking.id] && filteredResults.length ? <View style={styles.hotelGrid}>{filteredResults.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} selected={booking.selectedHotel?.id === hotel.id} nights={daysBetween(hotelSearch[booking.id]?.checkIn ?? booking.checkIn, hotelSearch[booking.id]?.checkOut ?? booking.checkOut)} canBook={canConfirmBooking} onSelect={() => selectHotel(booking.id, hotel)} />)}</View> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && hotelSearched[booking.id] && !hotelLoading[booking.id] && !results.length ? <AvailabilityMessage>No hotels returned by the booking API for this stay.</AvailabilityMessage> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && hotelSearched[booking.id] && !hotelLoading[booking.id] && results.length > 0 && !filteredResults.length ? <AvailabilityMessage>No hotels match the selected filters.</AvailabilityMessage> : null}
+                      </Stack>
+                    );
+                  })}
                 </Card>
               </Stack>
 
-              {isDesktop ? <BookingRail estimatedTotal={estimatedTotal} message={message} canBook={canConfirmBooking} onComplete={complete} /> : null}
+              {isDesktop ? <BookingRail estimatedTotal={estimatedTotal} message={message} canBook={canConfirmBooking} onFinishedBooking={finishBooking} /> : null}
             </Row>
-            {!isDesktop ? <BookingRail estimatedTotal={estimatedTotal} message={message} canBook={canConfirmBooking} onComplete={complete} /> : null}
+            {!isDesktop ? <BookingRail estimatedTotal={estimatedTotal} message={message} canBook={canConfirmBooking} onFinishedBooking={finishBooking} /> : null}
           </Stack>
         </Container>
         <Footer />
@@ -295,7 +314,45 @@ export default function BookingRoute() {
         <Button onPress={submitTraveler}>Done</Button>
       </AppModal>
       <AppModal visible={filtersOpen} title="Hotel filters" onClose={() => setFiltersOpen(false)}>
-        <Row wrap><Chip label="North Goa" /><Chip label="South Goa" /><Chip label="Under Rs 7,000" /><Chip label="4+ rating" /><Chip label="Breakfast" /></Row>
+        <Stack gap={spacing.lg}>
+          <Stack gap={spacing.sm}>
+            <Text style={styles.filterGroupLabel}>Area</Text>
+            <Row wrap>
+              <Chip label="All areas" selected={!hotelFilters.area} onPress={() => setHotelFilters((current) => ({ ...current, area: undefined }))} />
+              {availableHotelAreas.map((area) => (
+                <Chip key={area} label={area} selected={hotelFilters.area === area} onPress={() => setHotelFilters((current) => ({ ...current, area: current.area === area ? undefined : area }))} />
+              ))}
+            </Row>
+            {!availableHotelAreas.length ? <Text style={styles.filterHelperText}>Search hotels to see area filters.</Text> : null}
+          </Stack>
+          <Stack gap={spacing.sm}>
+            <Text style={styles.filterGroupLabel}>Price and rating</Text>
+            <Row wrap>
+              <Chip label="Under Rs 7,000" selected={hotelFilters.maxPrice === 7000} onPress={() => setHotelFilters((current) => ({ ...current, maxPrice: current.maxPrice === 7000 ? undefined : 7000 }))} />
+              <Chip label="Under Rs 15,000" selected={hotelFilters.maxPrice === 15000} onPress={() => setHotelFilters((current) => ({ ...current, maxPrice: current.maxPrice === 15000 ? undefined : 15000 }))} />
+              <Chip label="4+ rating" selected={hotelFilters.minRating === 4} onPress={() => setHotelFilters((current) => ({ ...current, minRating: current.minRating === 4 ? undefined : 4 }))} />
+            </Row>
+          </Stack>
+          <Stack gap={spacing.sm}>
+            <Text style={styles.filterGroupLabel}>Amenities</Text>
+            <Row wrap>
+              <Chip label="Breakfast" selected={hotelFilters.breakfastOnly} onPress={() => setHotelFilters((current) => ({ ...current, breakfastOnly: !current.breakfastOnly }))} />
+            </Row>
+          </Stack>
+          <Row wrap style={{ justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onPress={() => setHotelFilters({ breakfastOnly: false })}>Clear filters</Button>
+            <Button onPress={() => setFiltersOpen(false)}>Apply filters</Button>
+          </Row>
+        </Stack>
+      </AppModal>
+      <AppModal visible={finishedBookingOpen} title="Booking dates changed?" onClose={() => setFinishedBookingOpen(false)}>
+        <Stack gap={spacing.md}>
+          <Text style={styles.confirmText}>Would you like to regenerate itinerary according to your booking dates?</Text>
+          <Row wrap style={{ justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onPress={goToMyTrips}>No, go to My Trips</Button>
+            <Button onPress={regenerateFromBookingDates} icon={<ArrowRight size={16} color={colors.surface} />}>Yes, regenerate</Button>
+          </Row>
+        </Stack>
       </AppModal>
     </Screen>
   );
@@ -313,6 +370,34 @@ function defaultBookingDate(startDate: string) {
   const date = new Date(`${startDate}T00:00:00`);
   date.setDate(date.getDate() - 2);
   return date.toISOString().slice(0, 10);
+}
+
+function isIsoDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function filterHotels(hotels: HotelOption[], filters: HotelFilterState) {
+  return hotels.filter((hotel) => {
+    const amenities = hotel.amenities.join(' ').toLowerCase();
+    if (filters.area && hotel.area !== filters.area) return false;
+    if (filters.maxPrice && hotel.pricePerNight > filters.maxPrice) return false;
+    if (filters.minRating && hotel.rating < filters.minRating) return false;
+    if (filters.breakfastOnly && !amenities.includes('breakfast')) return false;
+    return true;
+  });
+}
+
+function hotelFilterLabels(filters: HotelFilterState) {
+  return [
+    filters.area ?? '',
+    filters.maxPrice ? `Under ${formatInr(filters.maxPrice)}` : '',
+    filters.minRating ? `${filters.minRating}+ rating` : '',
+    filters.breakfastOnly ? 'Breakfast' : ''
+  ].filter(Boolean);
+}
+
+function hotelAreas(results: Record<string, HotelOption[]>) {
+  return Array.from(new Set(Object.values(results).flat().map((hotel) => hotel.area).filter(Boolean))).slice(0, 8);
 }
 
 function DatePickerField({ label, value, onChange, style }: { label: string; value: string; onChange: (value: string) => void; style?: object }) {
@@ -380,6 +465,7 @@ function TransportCard({ option, selected, canBook, onSelect }: { option: Transp
   const Icon = option.type === 'flight' ? Plane : Train;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const title = option.transportNumber ? `${option.transportName ?? option.provider} (${option.transportNumber})` : option.transportName ?? option.provider;
+  const seatsLabel = option.seatsAvailable ?? '-';
   return (
     <>
       <Card selected={selected} style={styles.transportOptionCard}>
@@ -427,12 +513,55 @@ function TransportCard({ option, selected, canBook, onSelect }: { option: Transp
         </Stack>
       </Card>
       <AppModal visible={detailsOpen} title={title} onClose={() => setDetailsOpen(false)}>
-        <Stack>
-          <Row style={{ alignItems: 'center' }}><Icon size={18} color={colors.primary} /><Text style={{ fontWeight: '900' }}>{option.type === 'train' ? 'Train option' : 'Flight option'}</Text></Row>
-          <Text>{option.details}</Text>
-          <Text><Text style={{ color: colors.muted }}>Route </Text><Text style={{ fontWeight: '900' }}>{option.fromCode ?? '-'} to {option.toCode ?? '-'}</Text></Text>
-          <Text><Text style={{ color: colors.muted }}>Timing </Text><Text style={{ fontWeight: '900' }}>{formatTransportTime(option.departureTime)} to {formatTransportTime(option.arrivalTime)}</Text></Text>
-          <Text><Text style={{ color: colors.muted }}>Price / seat </Text><Text style={{ fontWeight: '900' }}>{formatInr(option.pricePerTraveler)}</Text></Text>
+        <Stack gap={spacing.md}>
+          <View style={styles.transportDetailsHero}>
+            <View style={styles.transportDetailsIcon}><Icon size={24} color={colors.surface} /></View>
+            <Stack gap={spacing.xs} style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.transportDetailsKicker}>{option.type === 'train' ? 'Train option' : 'Flight option'}</Text>
+              <Heading size="sm" numberOfLines={2}>{title}</Heading>
+              <Text style={styles.transportDetailsMuted}>{option.provider}{option.code ? ` · ${option.code}` : ''}</Text>
+            </Stack>
+            <StatusPill tone={selected ? 'primary' : 'neutral'}>{selected ? 'Selected' : 'Available'}</StatusPill>
+          </View>
+          <View style={styles.transportDetailsRoute}>
+            <Stack gap={spacing.xs}>
+              <Text style={styles.time}>{formatTransportTime(option.departureTime)}</Text>
+              <Text style={styles.stationCode}>{option.fromCode ?? '-'}</Text>
+            </Stack>
+            <Stack gap={spacing.xs} style={styles.transportDetailsDuration}>
+              <Clock size={15} color={colors.primary} />
+              <Text style={styles.durationText}>{option.duration}</Text>
+            </Stack>
+            <Stack gap={spacing.xs} style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.time}>{formatTransportTime(option.arrivalTime)}</Text>
+              <Text style={styles.stationCode}>{option.toCode ?? '-'}</Text>
+            </Stack>
+          </View>
+          <Row wrap style={styles.hotelDetailsStats}>
+            <View style={styles.hotelStatCard}>
+              <Text style={styles.hotelStatLabel}>Stops</Text>
+              <Text style={styles.hotelStatValue}>{option.stops}</Text>
+            </View>
+            <View style={styles.hotelStatCard}>
+              <Text style={styles.hotelStatLabel}>Seats</Text>
+              <Text style={styles.hotelStatValue}>{seatsLabel}</Text>
+            </View>
+            <View style={styles.hotelStatCard}>
+              <Text style={styles.hotelStatLabel}>Price / seat</Text>
+              <Text style={styles.hotelStatValue}>{formatInr(option.pricePerTraveler)}</Text>
+            </View>
+          </Row>
+          <Stack gap={spacing.sm} style={styles.hotelDetailsPanel}>
+            <Text style={styles.hotelDetailsLabel}>Journey details</Text>
+            <Text style={styles.hotelDetailsText}>{option.details}</Text>
+          </Stack>
+          <Row wrap style={styles.hotelDetailsFooter}>
+            <Stack gap={0}>
+              <Text style={styles.hotelPriceLabel}>Price / seat</Text>
+              <Text style={styles.hotelDetailsPrice}>{formatInr(option.pricePerTraveler)}</Text>
+            </Stack>
+            <Button onPress={onSelect} disabled={!canBook} style={styles.hotelDetailsBookButton}>{selected ? 'Booked' : `Book ${option.type}`}</Button>
+          </Row>
         </Stack>
       </AppModal>
     </>
@@ -452,6 +581,7 @@ function HotelCard({ hotel, selected, nights, canBook, onSelect }: { hotel: Hote
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsImageUrl, setDetailsImageUrl] = useState(() => hotel.imageUrl ? largeBookingHotelImageUrl(hotel.imageUrl) : undefined);
   const reviewText = hotel.reviewCount ? `${hotel.reviewCount.toLocaleString()} reviews` : hotel.reviewLabel ?? 'Reviews';
+  const totalPrice = hotel.pricePerNight * nights;
 
   return (
     <>
@@ -472,30 +602,71 @@ function HotelCard({ hotel, selected, nights, canBook, onSelect }: { hotel: Hote
             </Stack>
           </Row>
           <View style={styles.rule} />
-          <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
-            <Stack gap={0}>
+          <Row style={styles.hotelPriceRow}>
+            <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.hotelPriceLabel}>Per night</Text>
               <Text style={styles.hotelPrice}>{formatInr(hotel.pricePerNight)}</Text>
             </Stack>
-            <Text style={styles.hotelTotal}>{formatInr(hotel.pricePerNight * nights)} total</Text>
+            <Text style={styles.hotelTotal}>{formatInr(totalPrice)} total</Text>
           </Row>
-          <Row>
-            <Button variant="secondary" onPress={() => setDetailsOpen(true)}>Details</Button>
-            <Button onPress={onSelect} disabled={!canBook}>{selected ? 'Booked' : 'Book'}</Button>
+          <Row gap={spacing.sm} style={styles.hotelCardActions}>
+            <Button variant="secondary" onPress={() => setDetailsOpen(true)} style={styles.hotelDetailsButton}>Details</Button>
+            <Button onPress={onSelect} disabled={!canBook} style={styles.hotelBookButton}>{selected ? 'Booked' : 'Book'}</Button>
           </Row>
         </Stack>
       </Card>
       <AppModal visible={detailsOpen} title={hotel.name} onClose={() => setDetailsOpen(false)}>
-        {detailsImageUrl ? <Image source={{ uri: detailsImageUrl }} style={styles.hotelDetailsImage} resizeMode="cover" onError={() => setDetailsImageUrl(hotel.imageUrl)} /> : null}
-        <Stack>
-          <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
-            {hotel.rating > 0 ? <><Star size={15} color="#FACC15" fill="#FACC15" /><Text style={{ fontWeight: '900' }}>{hotel.rating.toFixed(1)}</Text></> : null}
-            <Text style={{ color: colors.muted }}>{reviewText}</Text>
+        <Stack gap={spacing.md}>
+          {detailsImageUrl ? (
+            <Image
+              source={{ uri: detailsImageUrl }}
+              style={styles.hotelDetailsImage}
+              resizeMode="cover"
+              onError={() => setDetailsImageUrl((current) => current === hotel.imageUrl ? undefined : hotel.imageUrl)}
+            />
+          ) : (
+            <View style={styles.hotelDetailsPlaceholder}>
+              <BedDouble size={34} color={colors.primary} />
+            </View>
+          )}
+          <Row wrap style={styles.hotelDetailsStats}>
+            <View style={styles.hotelStatCard}>
+              <Text style={styles.hotelStatLabel}>Rating</Text>
+              <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
+                <Star size={15} color="#FACC15" fill="#FACC15" />
+                <Text style={styles.hotelStatValue}>{hotel.rating > 0 ? hotel.rating.toFixed(1) : 'New'}</Text>
+              </Row>
+            </View>
+            <View style={styles.hotelStatCard}>
+              <Text style={styles.hotelStatLabel}>Reviews</Text>
+              <Text style={styles.hotelStatValue}>{reviewText}</Text>
+            </View>
+            <View style={styles.hotelStatCard}>
+              <Text style={styles.hotelStatLabel}>Stay total</Text>
+              <Text style={styles.hotelStatValue}>{formatInr(totalPrice)}</Text>
+            </View>
           </Row>
-          <Text style={{ color: colors.muted }}>{hotel.area}</Text>
-          <Text>{hotel.details}</Text>
-          <Row wrap>{hotel.amenities.map((amenity) => <Chip key={amenity} label={amenity} />)}</Row>
-          <Text><Text style={{ color: colors.muted }}>Per night </Text><Text style={{ fontWeight: '900' }}>{formatInr(hotel.pricePerNight)}</Text> · <Text style={{ color: colors.muted }}>Total </Text><Text style={{ fontWeight: '900' }}>{formatInr(hotel.pricePerNight * nights)}</Text></Text>
+          <View style={styles.hotelLocationRow}>
+            <MapPin size={16} color={colors.primary} />
+            <Text style={styles.hotelLocationText}>{hotel.area}</Text>
+          </View>
+          <Stack gap={spacing.sm} style={styles.hotelDetailsPanel}>
+            <Text style={styles.hotelDetailsLabel}>About this stay</Text>
+            <Text style={styles.hotelDetailsText}>{hotel.details}</Text>
+          </Stack>
+          {hotel.amenities.length ? (
+            <Stack gap={spacing.sm}>
+              <Text style={styles.hotelDetailsLabel}>Amenities</Text>
+              <Row wrap gap={spacing.sm}>{hotel.amenities.map((amenity) => <Chip key={amenity} label={amenity} />)}</Row>
+            </Stack>
+          ) : null}
+          <Row wrap style={styles.hotelDetailsFooter}>
+            <Stack gap={0}>
+              <Text style={styles.hotelPriceLabel}>Per night</Text>
+              <Text style={styles.hotelDetailsPrice}>{formatInr(hotel.pricePerNight)}</Text>
+            </Stack>
+            <Button onPress={onSelect} disabled={!canBook} style={styles.hotelDetailsBookButton}>{selected ? 'Booked' : 'Book this stay'}</Button>
+          </Row>
         </Stack>
       </AppModal>
     </>
@@ -510,12 +681,12 @@ function AvailabilityMessage({ children, tone = 'neutral' }: { children: ReactNo
   return <View style={StyleSheet.flatten([styles.availabilityMessage, tone === 'danger' && styles.availabilityError])}><Text style={StyleSheet.flatten([styles.availabilityText, tone === 'danger' && styles.availabilityErrorText])}>{children}</Text></View>;
 }
 
-function BookingRail({ estimatedTotal, message, canBook, onComplete }: { estimatedTotal: number; message: string; canBook: boolean; onComplete: () => void }) {
+function BookingRail({ estimatedTotal, message, canBook, onFinishedBooking }: { estimatedTotal: number; message: string; canBook: boolean; onFinishedBooking: () => void }) {
   const { isDesktop } = useResponsive();
   return (
     <View style={StyleSheet.flatten([styles.bookingRail, !isDesktop && styles.mobileBookingRail])}>
       <ItineraryPanel />
-      <Summary estimatedTotal={estimatedTotal} message={message} canBook={canBook} onComplete={onComplete} />
+      <Summary estimatedTotal={estimatedTotal} message={message} canBook={canBook} onFinishedBooking={onFinishedBooking} />
     </View>
   );
 }
@@ -543,8 +714,8 @@ function ItineraryPanel() {
   );
 }
 
-function Summary({ estimatedTotal, message, canBook, onComplete }: { estimatedTotal: number; message: string; canBook: boolean; onComplete: () => void }) {
-  const { trip, markBooked } = useTrip();
+function Summary({ estimatedTotal, message, canBook, onFinishedBooking }: { estimatedTotal: number; message: string; canBook: boolean; onFinishedBooking: () => void }) {
+  const { trip } = useTrip();
   const hasOrganizerEmail = trip.travelers.some((traveler) => traveler.role === 'organizer' && traveler.email?.trim());
   const travelerCount = trip.travelers.filter((traveler) => traveler.role !== 'organizer').length;
   const selectedTransport = trip.transportBookings.filter((booking) => booking.selectedOption);
@@ -570,8 +741,7 @@ function Summary({ estimatedTotal, message, canBook, onComplete }: { estimatedTo
           <Heading size="sm">{formatInr(estimatedTotal)}</Heading>
         </View>
         {message ? <Text style={StyleSheet.flatten([styles.summaryMessage, (message.includes('failed') || message.includes('required')) && styles.summaryMessageError])}>{message}</Text> : null}
-        <Button onPress={onComplete} disabled={!canBook} icon={<CreditCard size={16} color={colors.surface} />}>Complete bookings</Button>
-        <Button variant="secondary" onPress={markBooked} disabled={!canBook} icon={<ExternalLink size={16} color={colors.text} />}>I've finished booking</Button>
+        <Button variant="secondary" onPress={onFinishedBooking} disabled={!canBook} icon={<ExternalLink size={16} color={colors.text} />}>I've finished booking</Button>
       </Stack>
     </Card>
   );
@@ -628,7 +798,10 @@ const styles = StyleSheet.create({
   bookingSection: { borderRadius: 14, borderColor: '#D7E7FF', backgroundColor: '#FFFFFF' },
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center' },
   organizerCard: { borderColor: '#BFDBFE', backgroundColor: '#F8FBFF' },
+  organizerHeader: { alignItems: 'center', justifyContent: 'flex-start', gap: spacing.md },
   requiredText: { color: colors.danger, fontSize: 13, fontWeight: '700' },
+  filterGroupLabel: { color: colors.primaryDark, fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  filterHelperText: { color: colors.muted, fontSize: 12 },
   travelerCard: { flex: 1, minWidth: 280, backgroundColor: 'rgba(245,244,241,0.5)' },
   avatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#EBF2FE', alignItems: 'center', justifyContent: 'center' },
   inputLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
@@ -651,10 +824,17 @@ const styles = StyleSheet.create({
   transportMetaLabel: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   transportMetaValue: { color: colors.text, fontSize: 15, fontWeight: '900' },
   transportPrice: { color: colors.primaryDark, fontSize: 16, fontWeight: '900' },
-  hotelCard: { width: 300, minWidth: 300, padding: 0, overflow: 'hidden', borderColor: '#D7E7FF' },
+  transportDetailsHero: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 12, backgroundColor: '#F8FBFF', padding: spacing.md },
+  transportDetailsIcon: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundImage: 'linear-gradient(135deg, #2575F1 0%, #5EC8DF 100%)' as never },
+  transportDetailsKicker: { color: colors.primary, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  transportDetailsMuted: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  transportDetailsRoute: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 12, backgroundColor: '#FFFFFF', padding: spacing.lg },
+  transportDetailsDuration: { alignItems: 'center', minWidth: 100, paddingHorizontal: spacing.md },
+  hotelGrid: { display: 'grid' as never, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' as never, gap: spacing.md, width: '100%' },
+  hotelCard: { width: '100%', minWidth: 0, padding: 0, overflow: 'hidden', borderColor: '#D7E7FF' },
   hotelImage: { width: 68, height: 68, borderRadius: 8, backgroundColor: '#EBF2FE' },
   hotelImagePlaceholder: { width: 68, height: 68, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EBF2FE' },
-  hotelBody: { padding: spacing.md },
+  hotelBody: { padding: spacing.md, height: '100%', justifyContent: 'space-between' },
   hotelTitle: { fontSize: 16, lineHeight: 21 },
   hotelArea: { color: colors.muted, fontSize: 12 },
   hotelRating: { fontSize: 13, fontWeight: '900' },
@@ -662,11 +842,29 @@ const styles = StyleSheet.create({
   hotelPriceLabel: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   hotelPrice: { color: colors.primaryDark, fontSize: 16, fontWeight: '900' },
   hotelTotal: { color: colors.muted, fontSize: 12, fontWeight: '700' },
-  hotelDetailsImage: { width: '100%', height: 180, borderRadius: 8 },
+  hotelPriceRow: { justifyContent: 'space-between', alignItems: 'flex-end', gap: spacing.md },
+  hotelCardActions: { alignItems: 'center', width: '100%' },
+  hotelDetailsButton: { flex: 1, minHeight: 42, paddingHorizontal: spacing.md },
+  hotelBookButton: { flex: 1, minHeight: 42, paddingHorizontal: spacing.md },
+  hotelDetailsImage: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#EBF2FE' },
+  hotelDetailsPlaceholder: { width: '100%', height: 180, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EBF2FE', borderWidth: 1, borderColor: '#D7E7FF' },
+  hotelDetailsStats: { alignItems: 'stretch' },
+  hotelStatCard: { flex: 1, minWidth: 150, borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 10, backgroundColor: '#F8FBFF', padding: spacing.md, gap: spacing.xs },
+  hotelStatLabel: { color: colors.muted, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  hotelStatValue: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  hotelLocationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 10, backgroundColor: '#FFFFFF', padding: spacing.md },
+  hotelLocationText: { flex: 1, minWidth: 0, color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  hotelDetailsPanel: { borderRadius: 12, backgroundColor: colors.surfaceMuted, padding: spacing.md },
+  hotelDetailsLabel: { color: colors.primaryDark, fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  hotelDetailsText: { color: colors.text, fontSize: 14, lineHeight: 22 },
+  hotelDetailsFooter: { justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md },
+  hotelDetailsPrice: { color: colors.primaryDark, fontSize: 20, fontWeight: '900' },
+  hotelDetailsBookButton: { minWidth: 160 },
   availabilityMessage: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surfaceMuted, padding: spacing.md },
   availabilityText: { color: colors.muted, fontSize: 13 },
   availabilityError: { borderColor: '#F8C8C2', backgroundColor: '#FEEDEB' },
   availabilityErrorText: { color: colors.danger },
+  confirmText: { color: colors.muted, fontSize: 14, lineHeight: 21 },
   summaryReady: { color: colors.success, fontSize: 12, fontWeight: '900' },
   summaryRequired: { color: colors.danger, fontSize: 12, fontWeight: '900' },
   bookingRail: { width: 320, position: 'sticky' as never, top: spacing.md, alignSelf: 'flex-start' },
