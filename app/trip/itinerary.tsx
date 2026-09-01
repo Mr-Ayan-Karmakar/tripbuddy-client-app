@@ -6,7 +6,7 @@ import { Footer, Header } from '../../src/rn/chrome';
 import { colors, radius, shadow, spacing } from '../../src/rn/theme';
 import { AppModal, Button, Card, Chip, Container, Heading, Row, Screen, Stack, StatusPill, Text } from '../../src/rn/ui';
 import { useTrip } from '../../src/rn/state/tripStore';
-import { Activity, Restaurant } from '../../src/rn/types';
+import { Activity, Restaurant, StayBooking, TransportBooking } from '../../src/rn/types';
 import { useResponsive } from '../../src/rn/useResponsive';
 
 const paceLabel = { relaxed: 'Relaxed', balanced: 'Balanced', fast: 'Fast-paced' };
@@ -22,7 +22,7 @@ export default function ItineraryRoute() {
   const day = trip.itinerary.find((item) => item.id === selectedDay) ?? trip.itinerary[0];
   const tripVibe = trip.tripVibe?.trim() ?? '';
   const hasFewVibeMatches = Boolean(tripVibe && day && !day.restDay && day.activities.length < MIN_VIBE_MATCHED_PLACES);
-  const hasBookingProgress = [...trip.transportBookings, ...trip.stayBookings].some((booking) => booking.status === 'Selected' || booking.status === 'Booked');
+  const hasBookingProgress = [...trip.transportBookings, ...trip.stayBookings].some(hasBookingEvidence);
   const bookingCtaLabel = hasBookingProgress ? 'Review bookings' : 'Continue to booking';
 
   useEffect(() => {
@@ -190,13 +190,19 @@ function PlanningProgress() {
   );
 }
 
-function bookingProgressStep(label: string, bookings: Array<{ status: string }>) {
+function bookingProgressStep(label: string, bookings: Array<TransportBooking | StayBooking>) {
   if (!bookings.length) return { label, status: 'Pending', done: false };
-  if (bookings.every((booking) => booking.status === 'Booked')) return { label, status: 'Booked', done: true };
-  if (bookings.some((booking) => booking.status === 'Booked')) return { label, status: 'Part booked', done: true };
-  if (bookings.every((booking) => booking.status === 'Selected')) return { label, status: 'Selected', done: true };
-  if (bookings.some((booking) => booking.status === 'Selected')) return { label, status: 'Part selected', done: true };
+  if (bookings.every((booking) => hasBookingEvidence(booking) && booking.status === 'Booked')) return { label, status: 'Booked', done: true };
+  if (bookings.some((booking) => hasBookingEvidence(booking) && booking.status === 'Booked')) return { label, status: 'Part booked', done: true };
+  if (bookings.every((booking) => hasBookingEvidence(booking))) return { label, status: 'Selected', done: true };
+  if (bookings.some((booking) => hasBookingEvidence(booking))) return { label, status: 'Part selected', done: true };
   return { label, status: 'Pending', done: false };
+}
+
+function hasBookingEvidence(booking: TransportBooking | StayBooking) {
+  const transportBooking = booking as Partial<TransportBooking>;
+  const stayBooking = booking as Partial<StayBooking>;
+  return Boolean(booking.externalBookingId || transportBooking.selectedOption || stayBooking.selectedHotel);
 }
 
 function MobileSummary() {

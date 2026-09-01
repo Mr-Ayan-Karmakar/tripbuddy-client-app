@@ -1,6 +1,7 @@
 export type Pace = 'relaxed' | 'balanced' | 'fast';
 export type BookingStatus = 'Not selected' | 'Selected' | 'Booking' | 'Booked' | 'Failed';
 export type TransportType = 'flight' | 'train';
+export type SyncStatus = 'local' | 'syncing' | 'synced' | 'failed';
 
 export type Location = {
   id: string;
@@ -99,6 +100,7 @@ export type TransportBooking = {
   type: TransportType;
   status: BookingStatus;
   selectedOption?: TransportOption;
+  externalBookingId?: string;
 };
 
 export type StayBooking = {
@@ -111,9 +113,14 @@ export type StayBooking = {
   rooms: number;
   status: BookingStatus;
   selectedHotel?: HotelOption;
+  externalBookingId?: string;
 };
 
 export type Trip = {
+  serverTripId?: string;
+  tripCode?: string;
+  syncStatus?: SyncStatus;
+  syncError?: string;
   source: Location;
   destination: Location;
   startDate: string;

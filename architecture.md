@@ -78,17 +78,18 @@ It exposes:
 - itinerary generation draft updates.
 - saved trip selection/deletion.
 - traveler, transport, hotel, and booking mutations.
+- auth/account state and server trip recovery.
 
-When a generated itinerary is created, the store assigns a local saved-trip id and saves the full trip snapshot. Updates to the selected trip are synchronized back to that saved trip while the current trip has itinerary content.
+When a generated itinerary is created, the store assigns a local saved-trip id and saves the full trip snapshot. Once an organizer email is available, updates are synchronized to Trip Service and the returned public trip code is stored with the local snapshot.
 
 ## Persistence
 
-Saved itineraries are local-only:
+Saved itineraries are cached locally:
 
 - Web: persisted in `window.localStorage` using key `tripbuddy.savedTrips.v1`.
 - Native: retained in provider memory for the current app session.
 
-This is intentionally separated from backend persistence. If server-side trips are added later, keep the local saved trip adapter behind the store/service boundary and introduce a typed trip service instead of calling endpoints from pages directly.
+Trip Service is the canonical store for server-backed trip aggregates. Local storage remains an offline fallback/cache. Server trips carry a public `tripCode` for recovery with organizer email and OTP.
 
 ## API Integration
 
@@ -98,10 +99,13 @@ Current integration:
 
 - Guest auth: `POST /auth/api/guest`
 - Itinerary streaming: `POST /itinerary/api/stream`
+- Auth UI: OTP, register, login, logout, and password reset endpoints under `/auth/api`
+- Trip persistence and recovery under `/trip/api`
+- Booking confirmation endpoints under `/booking/api`
 
 The planner page calls `generateItinerary`, which handles auth, streaming response parsing, and mapping backend itinerary data into the shared `DayPlan` domain model.
 
-Screens should not call HTTP APIs directly. Add future transport, hotel, traveler, or booking calls as typed service functions in `src/rn/services/`.
+Screens should not call HTTP APIs directly. Transport, hotel, traveler, trip recovery, auth, and booking calls are exposed as typed service functions in `src/rn/services/`.
 
 ## UI System
 

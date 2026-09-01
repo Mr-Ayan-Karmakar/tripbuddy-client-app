@@ -70,16 +70,29 @@ http://localhost:8080
 Currently used endpoints:
 
 - `POST /auth/api/guest`
+- `POST /auth/api/otp/send`
+- `POST /auth/api/otp/verify`
+- `POST /auth/api/register`
+- `POST /auth/api/login`
+- `POST /auth/api/password-reset/*`
 - `POST /itinerary/api/stream`
+- `POST /trip/api/trips`
+- `PATCH /trip/api/trips/:tripId`
+- `GET /trip/api/trips`
+- `POST /trip/api/recovery/*`
+- `POST /booking/api/transport/book`
+- `POST /booking/api/hotel/book`
 
 Make sure the backend/API gateway is running before generating an itinerary.
 
 ## Local Data
 
-Generated itineraries are saved locally:
+Generated itineraries are cached locally and synced to Trip Service once an organizer email is available:
 
 - Web: `localStorage`, key `tripbuddy.savedTrips.v1`
 - Native: in-memory for the current app session
+
+Server-backed trips receive a public Trip ID such as `TB-7K9P2M` and can be recovered with organizer email plus OTP.
 
 ## Project Docs
 

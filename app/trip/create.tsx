@@ -77,6 +77,9 @@ export default function PlannerRoute() {
       const trimmedTripVibe = tripIdea.trim();
       const promptPreferences = preferences.filter((pref) => pref !== trimmedTripVibe);
       const prompt = [trimmedTripVibe, promptPreferences.join(', ')].filter(Boolean).join('. ') || `Plan a trip to ${destination}.`;
+      const preserveBookings = Boolean(plannerInput.preserveBookings)
+        && source.trim().toLowerCase() === trip.source.city.trim().toLowerCase()
+        && destination.trim().toLowerCase() === trip.destination.city.trim().toLowerCase();
       const itinerary = await generateItinerary({
         source,
         destination,
@@ -87,7 +90,7 @@ export default function PlannerRoute() {
         pace,
         prompt
       });
-      setDraft({ source, destination, startDate, days: numericDays, pace, preferences, preferenceText: tripIdea, endDate, itinerary });
+      setDraft({ source, destination, startDate, days: numericDays, pace, preferences, preferenceText: tripIdea, endDate, itinerary, preserveBookings });
       router.push('/trip/itinerary');
     } catch (error) {
       setGenerateError(error instanceof Error ? error.message : 'Unable to generate itinerary.');

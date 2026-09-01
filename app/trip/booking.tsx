@@ -1,14 +1,14 @@
 import { useRouter } from 'expo-router';
 import { ArrowRight, BedDouble, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, ExternalLink, Filter, Mail, MapPin, Plane, Plus, Star, Train, User } from 'lucide-react-native';
-import { createElement, type ChangeEvent, type CSSProperties, type ReactNode, useRef, useState, useEffect, useMemo } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { type ReactNode, useRef, useState, useEffect, useMemo } from 'react';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Footer, Header } from '../../src/rn/chrome';
 import { searchHotels, searchTransport } from '../../src/rn/services/api';
 import { daysBetween, formatInr } from '../../src/rn/data';
 import { colors, spacing } from '../../src/rn/theme';
 import { AppModal, Button, Card, Chip, Container, Heading, Input, Row, Screen, Stack, StatusPill, Text } from '../../src/rn/ui';
 import { useTrip } from '../../src/rn/state/tripStore';
-import { HotelOption, TransportOption, TransportType } from '../../src/rn/types';
+import { HotelOption, StayBooking, TransportBooking, TransportOption, TransportType, Trip } from '../../src/rn/types';
 import { useResponsive } from '../../src/rn/useResponsive';
 
 type TransportSearchState = {
@@ -30,6 +30,20 @@ type HotelFilterState = {
   breakfastOnly: boolean;
 };
 
+type DateWindow = {
+  startDate: string;
+  endDate: string;
+  days: number;
+};
+
+type CalendarAnchor = {
+  top: number;
+  left: number;
+  width: number;
+};
+
+const CALENDAR_PANEL_HEIGHT = 350;
+
 export default function BookingRoute() {
   const router = useRouter();
   const { isDesktop } = useResponsive();
@@ -47,10 +61,15 @@ export default function BookingRoute() {
   const [hotelErrors, setHotelErrors] = useState<Record<string, string>>({});
   const [transportLoading, setTransportLoading] = useState<Record<string, boolean>>({});
   const [hotelLoading, setHotelLoading] = useState<Record<string, boolean>>({});
+  const itineraryDateWindow = tripItineraryDateWindow(trip);
   const [transportSearched, setTransportSearched] = useState<Record<string, boolean>>({});
   const [hotelSearched, setHotelSearched] = useState<Record<string, boolean>>({});
-  const [transportSearch, setTransportSearch] = useState<Record<string, TransportSearchState>>(() => Object.fromEntries(trip.transportBookings.map((booking) => [booking.id, defaultTransportSearch(booking.source.city, booking.destination.city, trip.startDate)])));
-  const [hotelSearch, setHotelSearch] = useState<Record<string, HotelSearchState>>(() => Object.fromEntries(trip.stayBookings.map((booking) => [booking.id, defaultHotelSearch(booking.city.city, trip.startDate, trip.endDate)])));
+  const [transportSearch, setTransportSearch] = useState<Record<string, TransportSearchState>>(() =>
+    Object.fromEntries(trip.transportBookings.map((booking) => [booking.id, defaultTransportSearch(booking.source.city, booking.destination.city, booking.date || trip.startDate || itineraryDateWindow.startDate)]))
+  );
+  const [hotelSearch, setHotelSearch] = useState<Record<string, HotelSearchState>>(() =>
+    Object.fromEntries(trip.stayBookings.map((booking) => [booking.id, defaultHotelSearch(booking.city.city, booking.checkIn || trip.startDate || itineraryDateWindow.startDate, booking.checkOut || trip.endDate || itineraryDateWindow.endDate)]))
+  );
   const [message, setMessage] = useState('');
   const organizer = trip.travelers.find((traveler) => traveler.role === 'organizer');
   const organizerEmail = organizer?.email?.trim() ?? '';
@@ -58,17 +77,35 @@ export default function BookingRoute() {
   const canBook = organizerEmail.length > 0;
   const hasTraveler = bookingTravelers.length > 0;
   const canConfirmBooking = canBook && hasTraveler;
-  const adults = Math.max(1, bookingTravelers.filter((traveler) => traveler.age >= 18).length);
+  const adults = bookingTravelers.filter((traveler) => traveler.age >= 18).length;
   const children = bookingTravelers.filter((traveler) => traveler.age < 18).length;
+  const todayIso = currentIsoDate();
+  const visibleDateWindow = useMemo(() => deriveVisibleDateWindow(trip, transportSearch, hotelSearch), [hotelSearch, transportSearch, trip]);
 
   useEffect(() => {
     setTransportSearch((current) => ({
-      ...Object.fromEntries(trip.transportBookings.map((booking) => [booking.id, current[booking.id] ?? defaultTransportSearch(booking.source.city, booking.destination.city, trip.startDate)]))
+      ...Object.fromEntries(trip.transportBookings.map((booking) => {
+        const fallbackDate = booking.date || trip.startDate || itineraryDateWindow.startDate;
+        const existing = current[booking.id];
+        return [booking.id, { ...(existing ?? defaultTransportSearch(booking.source.city, booking.destination.city, fallbackDate)), date: toIsoDateValue(existing?.date) || defaultBookingDate(fallbackDate) }];
+      }))
     }));
     setHotelSearch((current) => ({
-      ...Object.fromEntries(trip.stayBookings.map((booking) => [booking.id, current[booking.id] ?? defaultHotelSearch(booking.city.city, trip.startDate, trip.endDate)]))
+      ...Object.fromEntries(trip.stayBookings.map((booking) => {
+        const fallbackCheckIn = booking.checkIn || trip.startDate || itineraryDateWindow.startDate;
+        const fallbackCheckOut = booking.checkOut || trip.endDate || itineraryDateWindow.endDate;
+        const existing = current[booking.id];
+        return [
+          booking.id,
+          {
+            ...(existing ?? defaultHotelSearch(booking.city.city, fallbackCheckIn, fallbackCheckOut)),
+            checkIn: toIsoDateValue(existing?.checkIn) || toIsoDateValue(fallbackCheckIn),
+            checkOut: toIsoDateValue(existing?.checkOut) || toIsoDateValue(fallbackCheckOut)
+          }
+        ];
+      }))
     }));
-  }, [trip.endDate, trip.startDate, trip.stayBookings, trip.transportBookings]);
+  }, [itineraryDateWindow.endDate, itineraryDateWindow.startDate, trip.endDate, trip.startDate, trip.stayBookings, trip.transportBookings]);
 
   const estimatedTotal = useMemo(() => {
     const travelerCount = Math.max(1, bookingTravelers.length);
@@ -94,18 +131,22 @@ export default function BookingRoute() {
 
   function updateTransportSearch(bookingId: string, patch: Partial<TransportSearchState>) {
     const booking = trip.transportBookings.find((item) => item.id === bookingId);
-    setTransportSearch((current) => ({ ...current, [bookingId]: { ...(current[bookingId] ?? defaultTransportSearch(booking?.source.city ?? '', booking?.destination.city ?? '', trip.startDate)), ...patch } }));
+    setTransportSearch((current) => ({ ...current, [bookingId]: { ...(current[bookingId] ?? defaultTransportSearch(booking?.source.city ?? '', booking?.destination.city ?? '', booking?.date || trip.startDate || itineraryDateWindow.startDate)), ...patch } }));
   }
 
   function updateHotelSearch(bookingId: string, patch: Partial<HotelSearchState>) {
     const booking = trip.stayBookings.find((item) => item.id === bookingId);
-    setHotelSearch((current) => ({ ...current, [bookingId]: { ...(current[bookingId] ?? defaultHotelSearch(booking?.city.city ?? '', trip.startDate, trip.endDate)), ...patch } }));
+    setHotelSearch((current) => ({ ...current, [bookingId]: { ...(current[bookingId] ?? defaultHotelSearch(booking?.city.city ?? '', booking?.checkIn || trip.startDate || itineraryDateWindow.startDate, booking?.checkOut || trip.endDate || itineraryDateWindow.endDate)), ...patch } }));
   }
 
   async function searchTransportOptions(bookingId: string) {
     if (!hasTraveler) return;
     const criteria = transportSearch[bookingId];
     if (!criteria?.source.trim() || !criteria.destination.trim() || !criteria.date.trim()) return;
+    if (isBeforeToday(criteria.date, todayIso)) {
+      setTransportErrors((current) => ({ ...current, [bookingId]: 'Choose today or a future travel date.' }));
+      return;
+    }
     setTransportLoading((current) => ({ ...current, [bookingId]: true }));
     setTransportErrors((current) => ({ ...current, [bookingId]: '' }));
     setTransportSearched((current) => ({ ...current, [bookingId]: true }));
@@ -124,6 +165,10 @@ export default function BookingRoute() {
     if (!hasTraveler) return;
     const criteria = hotelSearch[bookingId];
     if (!criteria?.city.trim() || !criteria.checkIn.trim() || !criteria.checkOut.trim()) return;
+    if (isBeforeToday(criteria.checkIn, todayIso) || isBeforeToday(criteria.checkOut, todayIso)) {
+      setHotelErrors((current) => ({ ...current, [bookingId]: 'Choose today or future stay dates.' }));
+      return;
+    }
     setHotelLoading((current) => ({ ...current, [bookingId]: true }));
     setHotelErrors((current) => ({ ...current, [bookingId]: '' }));
     setHotelSearched((current) => ({ ...current, [bookingId]: true }));
@@ -141,32 +186,38 @@ export default function BookingRoute() {
 
   function finishBooking() {
     if (!canConfirmBooking) return;
+    if (!bookingDateWindow()) {
+      setMessage('Choose valid travel or stay dates before finishing booking.');
+      return;
+    }
+    setMessage('');
     setFinishedBookingOpen(true);
   }
 
-  function regenerateFromBookingDates() {
+  async function regenerateFromBookingDates() {
     const bookingDates = bookingDateWindow();
-    markBooked();
+    if (!bookingDates) {
+      setMessage('Choose valid travel or stay dates before regenerating.');
+      setFinishedBookingOpen(false);
+      return;
+    }
+    await markBooked();
     setFinishedBookingOpen(false);
-    setPlannerInput({ source: trip.source.city, destination: trip.destination.city, startDate: bookingDates.startDate, days: bookingDates.days, pace: trip.pace, tripVibe: trip.tripVibe });
+    setPlannerInput({ source: trip.source.city, destination: trip.destination.city, startDate: bookingDates.startDate, days: bookingDates.days, pace: trip.pace, tripVibe: trip.tripVibe, preserveBookings: true });
     router.push('/trip/create');
   }
 
-  function goToMyTrips() {
-    markBooked();
+  async function goToMyTrips() {
+    await markBooked();
     setFinishedBookingOpen(false);
     router.push('/trips');
   }
 
   function bookingDateWindow() {
-    const dates = [
-      ...trip.transportBookings.map((booking) => transportSearch[booking.id]?.date ?? booking.date),
-      ...trip.stayBookings.flatMap((booking) => [hotelSearch[booking.id]?.checkIn ?? booking.checkIn, hotelSearch[booking.id]?.checkOut ?? booking.checkOut])
-    ].filter(isIsoDate);
-    const sortedDates = dates.sort();
-    const startDate = sortedDates[0] ?? trip.startDate;
-    const endDate = sortedDates.at(-1) ?? trip.endDate;
-    return { startDate, days: Math.max(1, daysBetween(startDate, endDate)) };
+    const startDate = visibleDateWindow.startDate;
+    const endDate = visibleDateWindow.endDate;
+    if (!startDate || !endDate) return null;
+    return { startDate, days: visibleDateWindow.days || Math.max(1, daysBetween(startDate, endDate)) };
   }
 
   return (
@@ -183,7 +234,7 @@ export default function BookingRoute() {
               </Stack>
               <Card style={styles.contextCard}>
                 <Row gap={spacing.sm} style={{ alignItems: 'center' }}><MapPin size={16} color={colors.primary} /><Text style={styles.contextTitle}>{trip.source.city} to {trip.destination.city}</Text></Row>
-                <Text style={styles.contextText}>{trip.startDate} to {trip.endDate} · {trip.days} days</Text>
+                <Text style={styles.contextText}>{dateLabel(visibleDateWindow.startDate)} to {dateLabel(visibleDateWindow.endDate)} · {visibleDateWindow.days} days</Text>
               </Card>
             </Row>
           </Container>
@@ -243,32 +294,33 @@ export default function BookingRoute() {
                   <Row><Chip label="Flight" selected={transportType === 'flight'} onPress={() => setTransportType('flight')} /><Chip label="Train" selected={transportType === 'train'} onPress={() => setTransportType('train')} /></Row>
                   {trip.transportBookings.map((booking) => (
                     <Stack key={booking.id}>
-                      <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.source.city} to {booking.destination.city}</Text><Text style={{ color: colors.muted }}>{booking.journeyName} · {booking.date}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
+                      <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.source.city} to {booking.destination.city}</Text><Text style={{ color: colors.muted }}>{booking.journeyName} · {dateLabel(transportSearch[booking.id]?.date || booking.date || itineraryDateWindow.startDate)}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
                       <View style={styles.searchGrid}>
                         <Input label="Source" value={transportSearch[booking.id]?.source ?? booking.source.city} onChangeText={(value) => updateTransportSearch(booking.id, { source: value })} placeholder="From city" style={styles.searchInput} />
                         <Input label="Destination" value={transportSearch[booking.id]?.destination ?? booking.destination.city} onChangeText={(value) => updateTransportSearch(booking.id, { destination: value })} placeholder="To city" style={styles.searchInput} />
-                        <DatePickerField label="Travel date" value={transportSearch[booking.id]?.date ?? defaultBookingDate(trip.startDate)} onChange={(value) => updateTransportSearch(booking.id, { date: value })} style={styles.searchInput} />
+                        <DatePickerField label="Travel date" value={toIsoDateValue(transportSearch[booking.id]?.date || defaultBookingDate(booking.date || trip.startDate || itineraryDateWindow.startDate))} minDate={todayIso} onChange={(value) => updateTransportSearch(booking.id, { date: value })} style={styles.searchInput} />
                         <Button onPress={() => searchTransportOptions(booking.id)} disabled={!hasTraveler || transportLoading[booking.id]} style={styles.searchButton}>{transportLoading[booking.id] ? 'Searching...' : 'Search'}</Button>
                       </View>
                       {transportErrors[booking.id] ? <AvailabilityMessage tone="danger">{transportErrors[booking.id]}</AvailabilityMessage> : null}
                       {!hasTraveler ? <AvailabilityMessage tone="danger">Add at least 1 traveler to search and view available {transportType} options.</AvailabilityMessage> : null}
                       {hasTraveler && !transportErrors[booking.id] && !transportSearched[booking.id] ? <AvailabilityMessage>Adjust the route or travel date, then search live {transportType} availability.</AvailabilityMessage> : null}
                       {hasTraveler && !transportErrors[booking.id] && transportLoading[booking.id] ? <AvailabilityMessage>Checking live {transportType} availability...</AvailabilityMessage> : null}
-                      {hasTraveler && !transportErrors[booking.id] && !transportLoading[booking.id] && (transportResults[booking.id] ?? []).length ? (
+                      {hasTraveler && !transportErrors[booking.id] && !transportLoading[booking.id] && !booking.selectedOption && (transportResults[booking.id] ?? []).length ? (
                         <TransportCarousel
                           options={transportResults[booking.id] ?? []}
-                          selectedId={booking.selectedOption?.id}
+                          selectedId={undefined}
                           canBook={canConfirmBooking}
-                          onSelect={(option) => selectTransport(booking.id, option)}
+                          onSelect={(option) => selectTransport(booking.id, option, transportSearch[booking.id]?.date)}
                         />
                       ) : null}
-                      {hasTraveler && !transportErrors[booking.id] && transportSearched[booking.id] && !transportLoading[booking.id] && !(transportResults[booking.id] ?? []).length ? <AvailabilityMessage>No {transportType === 'flight' ? 'flights' : 'trains'} returned by the booking API for this segment.</AvailabilityMessage> : null}
+                      {booking.selectedOption ? <AvailabilityMessage>{transportSummaryLine(booking, transportSearch[booking.id]?.date || itineraryDateWindow.startDate)}</AvailabilityMessage> : null}
+                      {hasTraveler && !transportErrors[booking.id] && transportSearched[booking.id] && !transportLoading[booking.id] && !booking.selectedOption && !(transportResults[booking.id] ?? []).length ? <AvailabilityMessage>No {transportType === 'flight' ? 'flights' : 'trains'} returned by the booking API for this segment.</AvailabilityMessage> : null}
                     </Stack>
                   ))}
                 </Card>
 
                 <Card style={styles.bookingSection}>
-                  <Row wrap style={styles.sectionHeader}><Stack><Heading size="md">Stay</Heading><Text style={{ color: colors.muted }}>{trip.destination.city} · {trip.startDate} to {trip.endDate}</Text></Stack><Button variant="secondary" onPress={() => setFiltersOpen(true)} icon={<Filter size={16} color={colors.text} />}>Filters{activeHotelFilterLabels.length ? ` (${activeHotelFilterLabels.length})` : ''}</Button></Row>
+                  <Row wrap style={styles.sectionHeader}><Stack><Heading size="md">Stay</Heading><Text style={{ color: colors.muted }}>{trip.destination.city} · {dateLabel(visibleDateWindow.startDate)} to {dateLabel(visibleDateWindow.endDate)}</Text></Stack><Button variant="secondary" onPress={() => setFiltersOpen(true)} icon={<Filter size={16} color={colors.text} />}>Filters{activeHotelFilterLabels.length ? ` (${activeHotelFilterLabels.length})` : ''}</Button></Row>
                   <Row wrap>
                     {(activeHotelFilterLabels.length ? activeHotelFilterLabels : ['All hotels']).map((label) => <Chip key={label} label={label} selected={activeHotelFilterLabels.length > 0} onPress={() => setFiltersOpen(true)} />)}
                   </Row>
@@ -277,29 +329,33 @@ export default function BookingRoute() {
                     const filteredResults = filterHotels(results, hotelFilters);
                     return (
                       <Stack key={booking.id}>
-                        <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.stayName}</Text><Text style={{ color: colors.muted }}>{booking.city.city} · {booking.checkIn} to {booking.checkOut}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
+                        <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.stayName}</Text><Text style={{ color: colors.muted }}>{booking.city.city} · {dateLabel(hotelSearch[booking.id]?.checkIn || booking.checkIn || itineraryDateWindow.startDate)} to {dateLabel(hotelSearch[booking.id]?.checkOut || booking.checkOut || itineraryDateWindow.endDate)}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
                         <View style={styles.searchGrid}>
                           <Input label="Destination" value={hotelSearch[booking.id]?.city ?? booking.city.city} onChangeText={(value) => updateHotelSearch(booking.id, { city: value })} placeholder="City or destination" style={styles.searchInput} />
-                          <Input label="Check-in" value={hotelSearch[booking.id]?.checkIn ?? trip.startDate} onChangeText={(value) => updateHotelSearch(booking.id, { checkIn: value })} placeholder="YYYY-MM-DD" style={styles.searchInput} />
-                          <Input label="Check-out" value={hotelSearch[booking.id]?.checkOut ?? trip.endDate} onChangeText={(value) => updateHotelSearch(booking.id, { checkOut: value })} placeholder="YYYY-MM-DD" style={styles.searchInput} />
+                          <DatePickerField label="Check-in" value={toIsoDateValue(hotelSearch[booking.id]?.checkIn || booking.checkIn || trip.startDate || itineraryDateWindow.startDate)} minDate={todayIso} onChange={(value) => updateHotelSearch(booking.id, { checkIn: value })} style={styles.searchInput} />
+                          <DatePickerField label="Check-out" value={toIsoDateValue(hotelSearch[booking.id]?.checkOut || booking.checkOut || trip.endDate || itineraryDateWindow.endDate)} minDate={todayIso} onChange={(value) => updateHotelSearch(booking.id, { checkOut: value })} style={styles.searchInput} />
                           <Button onPress={() => searchHotelOptions(booking.id, booking.rooms)} disabled={!hasTraveler || hotelLoading[booking.id]} style={styles.searchButton}>{hotelLoading[booking.id] ? 'Searching...' : 'Search'}</Button>
                         </View>
                         {hotelErrors[booking.id] ? <AvailabilityMessage tone="danger">{hotelErrors[booking.id]}</AvailabilityMessage> : null}
                         {!hasTraveler ? <AvailabilityMessage tone="danger">Add at least 1 traveler to search and view available hotel options.</AvailabilityMessage> : null}
                         {hasTraveler && !hotelErrors[booking.id] && !hotelSearched[booking.id] ? <AvailabilityMessage>Adjust the destination or stay dates, then search live hotel availability.</AvailabilityMessage> : null}
                         {hasTraveler && !hotelErrors[booking.id] && hotelLoading[booking.id] ? <AvailabilityMessage>Checking live hotel availability...</AvailabilityMessage> : null}
-                        {hasTraveler && !hotelErrors[booking.id] && !hotelLoading[booking.id] && filteredResults.length ? <View style={styles.hotelGrid}>{filteredResults.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} selected={booking.selectedHotel?.id === hotel.id} nights={daysBetween(hotelSearch[booking.id]?.checkIn ?? booking.checkIn, hotelSearch[booking.id]?.checkOut ?? booking.checkOut)} canBook={canConfirmBooking} onSelect={() => selectHotel(booking.id, hotel)} />)}</View> : null}
-                        {hasTraveler && !hotelErrors[booking.id] && hotelSearched[booking.id] && !hotelLoading[booking.id] && !results.length ? <AvailabilityMessage>No hotels returned by the booking API for this stay.</AvailabilityMessage> : null}
-                        {hasTraveler && !hotelErrors[booking.id] && hotelSearched[booking.id] && !hotelLoading[booking.id] && results.length > 0 && !filteredResults.length ? <AvailabilityMessage>No hotels match the selected filters.</AvailabilityMessage> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && !hotelLoading[booking.id] && !booking.selectedHotel && filteredResults.length ? <View style={styles.hotelGrid}>{filteredResults.map((hotel) => {
+                          const stayDates = { checkIn: hotelSearch[booking.id]?.checkIn ?? booking.checkIn, checkOut: hotelSearch[booking.id]?.checkOut ?? booking.checkOut };
+                          return <HotelCard key={hotel.id} hotel={hotel} selected={booking.selectedHotel?.id === hotel.id} nights={daysBetween(stayDates.checkIn, stayDates.checkOut)} canBook={canConfirmBooking} onSelect={() => selectHotel(booking.id, hotel, stayDates)} />;
+                        })}</View> : null}
+                        {booking.selectedHotel ? <AvailabilityMessage>{hotelSummaryLine(booking)}</AvailabilityMessage> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && hotelSearched[booking.id] && !hotelLoading[booking.id] && !booking.selectedHotel && !results.length ? <AvailabilityMessage>No hotels returned by the booking API for this stay.</AvailabilityMessage> : null}
+                        {hasTraveler && !hotelErrors[booking.id] && hotelSearched[booking.id] && !hotelLoading[booking.id] && !booking.selectedHotel && results.length > 0 && !filteredResults.length ? <AvailabilityMessage>No hotels match the selected filters.</AvailabilityMessage> : null}
                       </Stack>
                     );
                   })}
                 </Card>
               </Stack>
 
-              {isDesktop ? <BookingRail estimatedTotal={estimatedTotal} message={message} canBook={canConfirmBooking} onFinishedBooking={finishBooking} /> : null}
+              {isDesktop ? <BookingRail dateWindow={visibleDateWindow} estimatedTotal={estimatedTotal} message={message || trip.syncError || ''} canBook={canConfirmBooking} onFinishedBooking={finishBooking} /> : null}
             </Row>
-            {!isDesktop ? <BookingRail estimatedTotal={estimatedTotal} message={message} canBook={canConfirmBooking} onFinishedBooking={finishBooking} /> : null}
+            {!isDesktop ? <BookingRail dateWindow={visibleDateWindow} estimatedTotal={estimatedTotal} message={message || trip.syncError || ''} canBook={canConfirmBooking} onFinishedBooking={finishBooking} /> : null}
           </Stack>
         </Container>
         <Footer />
@@ -362,18 +418,93 @@ function defaultTransportSearch(source: string, destination: string, startDate: 
   return { source, destination, date: defaultBookingDate(startDate) };
 }
 
+function deriveVisibleDateWindow(trip: Trip, transportSearch: Record<string, TransportSearchState>, hotelSearch: Record<string, HotelSearchState>): DateWindow {
+  const dates = [
+    ...trip.transportBookings.flatMap((booking) => [transportSearch[booking.id]?.date, booking.date]),
+    ...trip.stayBookings.flatMap((booking) => [hotelSearch[booking.id]?.checkIn, hotelSearch[booking.id]?.checkOut, booking.checkIn, booking.checkOut]),
+    ...trip.itinerary.map((day) => day.date),
+    trip.startDate,
+    trip.endDate
+  ].map(toIsoDateValue).filter(Boolean).sort();
+  const startDate = dates[0] ?? '';
+  const endDate = dates.at(-1) ?? startDate;
+  return makeDateWindow(startDate, endDate, trip.days);
+}
+
+function tripItineraryDateWindow(trip: Trip): DateWindow {
+  const itineraryDates = trip.itinerary.map((day) => day.date).map(toIsoDateValue).filter(Boolean).sort();
+  return makeDateWindow(itineraryDates[0] ?? '', itineraryDates.at(-1) ?? itineraryDates[0] ?? '', trip.days);
+}
+
+function makeDateWindow(startDate: string, endDate: string, fallbackDays = 0): DateWindow {
+  return {
+    startDate,
+    endDate,
+    days: fallbackDays || (startDate && endDate ? daysBetween(startDate, endDate) : 0)
+  };
+}
+
 function defaultHotelSearch(city: string, checkIn: string, checkOut: string): HotelSearchState {
-  return { city, checkIn, checkOut };
+  return { city, checkIn: toIsoDateValue(checkIn), checkOut: toIsoDateValue(checkOut) };
 }
 
 function defaultBookingDate(startDate: string) {
-  const date = new Date(`${startDate}T00:00:00`);
+  const dateValue = toIsoDateValue(startDate);
+  if (!dateValue) return '';
+  const date = new Date(`${dateValue}T00:00:00`);
   date.setDate(date.getDate() - 2);
-  return date.toISOString().slice(0, 10);
+  const candidate = toLocalIsoDate(date);
+  return candidate < currentIsoDate() ? currentIsoDate() : candidate;
 }
 
-function isIsoDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+function toIsoDateValue(value: unknown) {
+  if (!value) return '';
+  const dateOnly = value instanceof Date ? toLocalIsoDate(value) : String(value).trim().slice(0, 10);
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
+  if (!parts) return '';
+  const [, yearPart, monthPart, dayPart] = parts;
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day ? '' : dateOnly;
+}
+
+function dateLabel(value: unknown) {
+  return toIsoDateValue(value) || 'Date not set';
+}
+
+function currentIsoDate() {
+  return toLocalIsoDate(new Date());
+}
+
+function isBeforeToday(value: string, today: string) {
+  const dateValue = toIsoDateValue(value);
+  return Boolean(dateValue) && dateValue < today;
+}
+
+function monthStart(value: string) {
+  const dateValue = toIsoDateValue(value) || currentIsoDate();
+  const date = new Date(`${dateValue}T00:00:00`);
+  date.setDate(1);
+  return date;
+}
+
+function toLocalIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function transportSummaryLine(booking: TransportBooking, fallbackDate?: string) {
+  if (!booking.selectedOption) return '';
+  return `Selected ${booking.selectedOption.provider} ${booking.selectedOption.code} for ${dateLabel(booking.date || fallbackDate)}. See booking summary.`;
+}
+
+function hotelSummaryLine(booking: StayBooking) {
+  if (!booking.selectedHotel) return '';
+  return `Selected ${booking.selectedHotel.name} for ${dateLabel(booking.checkIn)} to ${dateLabel(booking.checkOut)}. See booking summary.`;
 }
 
 function filterHotels(hotels: HotelOption[], filters: HotelFilterState) {
@@ -400,21 +531,116 @@ function hotelAreas(results: Record<string, HotelOption[]>) {
   return Array.from(new Set(Object.values(results).flat().map((hotel) => hotel.area).filter(Boolean))).slice(0, 8);
 }
 
-function DatePickerField({ label, value, onChange, style }: { label: string; value: string; onChange: (value: string) => void; style?: object }) {
+function DatePickerField({ label, value, minDate, onChange, style }: { label: string; value: string; minDate?: string; onChange: (value: string) => void; style?: object }) {
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(() => monthStart(value || minDate || currentIsoDate()));
+  const fieldRef = useRef<View>(null);
+  const [calendarAnchor, setCalendarAnchor] = useState<CalendarAnchor>({ top: 0, left: 0, width: 310 });
+
+  useEffect(() => {
+    if (!open) return;
+    setViewDate(monthStart(value || minDate || currentIsoDate()));
+    positionCalendar();
+  }, [minDate, open, value]);
+
+  function positionCalendar() {
+    fieldRef.current?.measureInWindow((x, y, width, height) => {
+      const preferredWidth = Math.max(310, width);
+      const viewportWidth = typeof window === 'undefined' ? 0 : window.innerWidth;
+      const viewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight;
+      const panelWidth = viewportWidth ? Math.min(preferredWidth, viewportWidth - spacing.lg * 2) : preferredWidth;
+      const left = viewportWidth ? Math.max(spacing.lg, Math.min(x, viewportWidth - panelWidth - spacing.lg)) : x;
+      const belowTop = y + height + spacing.xs;
+      const aboveTop = y - CALENDAR_PANEL_HEIGHT - spacing.xs;
+      const top = viewportHeight && belowTop + CALENDAR_PANEL_HEIGHT > viewportHeight - spacing.lg
+        ? Math.max(spacing.lg, aboveTop)
+        : belowTop;
+      setCalendarAnchor({ top, left, width: panelWidth });
+    });
+  }
+
+  function toggleCalendar() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    positionCalendar();
+    setOpen(true);
+  }
+
+  function selectDate(nextDate: string) {
+    onChange(nextDate);
+    setOpen(false);
+  }
+
   return (
-    <Stack gap={spacing.xs} style={style}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.dateInputShell}>
-        <CalendarDays size={16} color={colors.primary} />
-        {createElement('input', {
-          'aria-label': label,
-          type: 'date',
-          value,
-          onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.currentTarget.value),
-          style: webDateInputStyle
+    <Stack gap={spacing.xs} style={StyleSheet.flatten([style, styles.datePickerField])}>
+      <View ref={fieldRef} collapsable={false} style={styles.dateFieldAnchor}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={toggleCalendar} style={styles.dateInputShell}>
+          <CalendarDays size={16} color={colors.primary} />
+          <Text style={StyleSheet.flatten([styles.dateInputText, !value && styles.datePlaceholder])}>{value || 'Select date'}</Text>
+        </Pressable>
+      </View>
+      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close date picker" onPress={() => setOpen(false)} style={styles.calendarModalOverlay}>
+          <Pressable
+            accessibilityRole="none"
+            onPress={(event) => event.stopPropagation()}
+            style={StyleSheet.flatten([styles.calendarPopover, { top: calendarAnchor.top, left: calendarAnchor.left, width: calendarAnchor.width }])}
+          >
+            <BookingCalendar selected={value} minDate={minDate} viewDate={viewDate} onViewDateChange={setViewDate} onSelect={selectDate} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </Stack>
+  );
+}
+
+function BookingCalendar({ selected, minDate, viewDate, onViewDateChange, onSelect }: { selected: string; minDate?: string; viewDate: Date; onViewDateChange: (date: Date) => void; onSelect: (date: string) => void }) {
+  const monthLabel = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const firstDay = viewDate.getDay();
+  const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+  const cells = [
+    ...Array.from({ length: firstDay }, (_, index) => ({ key: `empty-${index}`, day: 0 })),
+    ...Array.from({ length: daysInMonth }, (_, index) => ({ key: `day-${index + 1}`, day: index + 1 }))
+  ];
+
+  function moveMonth(delta: number) {
+    onViewDateChange(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1));
+  }
+
+  return (
+    <View style={styles.calendarPanel}>
+      <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => moveMonth(-1)} style={styles.calendarNav}><ChevronLeft size={16} color={colors.text} /></Pressable>
+        <Text style={styles.calendarMonth}>{monthLabel}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next month" onPress={() => moveMonth(1)} style={styles.calendarNav}><ChevronRight size={16} color={colors.text} /></Pressable>
+      </Row>
+      <View style={styles.weekGrid}>
+        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => <Text key={day} style={styles.weekLabel}>{day}</Text>)}
+        {cells.map(({ key, day }) => {
+          const iso = day ? toLocalIsoDate(new Date(viewDate.getFullYear(), viewDate.getMonth(), day)) : '';
+          const disabled = Boolean(day && minDate && iso < minDate);
+          const isSelected = iso === selected;
+          return day ? (
+            <Pressable
+              key={key}
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${iso}`}
+              accessibilityState={{ disabled, selected: isSelected }}
+              disabled={disabled}
+              onPress={() => onSelect(iso)}
+              style={StyleSheet.flatten([styles.dayCell, disabled && styles.dayCellDisabled, isSelected && styles.dayCellSelected])}
+            >
+              <Text style={StyleSheet.flatten([styles.dayText, disabled && styles.dayTextDisabled, isSelected && styles.dayTextSelected])}>{day}</Text>
+            </Pressable>
+          ) : (
+            <View key={key} style={styles.dayCell} />
+          );
         })}
       </View>
-    </Stack>
+    </View>
   );
 }
 
@@ -681,25 +907,26 @@ function AvailabilityMessage({ children, tone = 'neutral' }: { children: ReactNo
   return <View style={StyleSheet.flatten([styles.availabilityMessage, tone === 'danger' && styles.availabilityError])}><Text style={StyleSheet.flatten([styles.availabilityText, tone === 'danger' && styles.availabilityErrorText])}>{children}</Text></View>;
 }
 
-function BookingRail({ estimatedTotal, message, canBook, onFinishedBooking }: { estimatedTotal: number; message: string; canBook: boolean; onFinishedBooking: () => void }) {
+function BookingRail({ dateWindow, estimatedTotal, message, canBook, onFinishedBooking }: { dateWindow: DateWindow; estimatedTotal: number; message: string; canBook: boolean; onFinishedBooking: () => void }) {
   const { isDesktop } = useResponsive();
   return (
     <View style={StyleSheet.flatten([styles.bookingRail, !isDesktop && styles.mobileBookingRail])}>
-      <ItineraryPanel />
+      <ItineraryPanel dateWindow={dateWindow} />
       <Summary estimatedTotal={estimatedTotal} message={message} canBook={canBook} onFinishedBooking={onFinishedBooking} />
     </View>
   );
 }
 
-function ItineraryPanel() {
+function ItineraryPanel({ dateWindow }: { dateWindow: DateWindow }) {
   const { trip } = useTrip();
+  const displayDateWindow = dateWindow.startDate || dateWindow.endDate ? dateWindow : tripItineraryDateWindow(trip);
   return (
     <Card style={styles.itineraryPanel}>
       <Row style={{ alignItems: 'center' }}>
         <View style={styles.avatar}><CalendarDays size={20} color={colors.primary} /></View>
         <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
           <Heading size="sm">Trip itinerary</Heading>
-          <Text style={styles.railSubText} numberOfLines={1} ellipsizeMode="tail">{trip.destination.city} · {trip.startDate} to {trip.endDate}</Text>
+          <Text style={styles.railSubText} numberOfLines={1} ellipsizeMode="tail">{trip.destination.city} · {dateLabel(displayDateWindow.startDate)} to {dateLabel(displayDateWindow.endDate)}</Text>
         </Stack>
       </Row>
       <ScrollView style={styles.itineraryScroll} contentContainerStyle={styles.itineraryScrollContent} nestedScrollEnabled>
@@ -720,28 +947,30 @@ function Summary({ estimatedTotal, message, canBook, onFinishedBooking }: { esti
   const travelerCount = trip.travelers.filter((traveler) => traveler.role !== 'organizer').length;
   const selectedTransport = trip.transportBookings.filter((booking) => booking.selectedOption);
   const selectedStays = trip.stayBookings.filter((booking) => booking.selectedHotel);
+  const itineraryDateWindow = tripItineraryDateWindow(trip);
   return (
     <Card style={styles.summary}>
       <Stack gap={spacing.md}>
         <Heading size="sm">Booking summary</Heading>
+        {trip.tripCode ? <Text style={styles.tripCodeText}>Trip ID: {trip.tripCode}</Text> : null}
         <View style={styles.summaryChecklist}>
           <SummaryStatus label="Organizer email" value={hasOrganizerEmail ? 'Added' : 'Required'} ready={hasOrganizerEmail} />
           <SummaryStatus label="Travelers" value={travelerCount ? `${travelerCount}` : 'Required'} ready={travelerCount > 0} />
         </View>
         <View style={styles.rule} />
         <SummarySelection title="Booked transportation" empty="Not booked">
-          {selectedTransport.map((booking) => <Text key={booking.id} style={styles.summarySelectionText}>{booking.selectedOption?.provider} {booking.selectedOption?.code}</Text>)}
+          {selectedTransport.map((booking) => <TransportSummaryItem key={booking.id} booking={booking} travelerCount={Math.max(1, travelerCount)} fallbackDate={itineraryDateWindow.startDate} />)}
         </SummarySelection>
         <View style={styles.rule} />
         <SummarySelection title="Booked stays" empty="Not booked">
-          {selectedStays.map((booking) => <Text key={booking.id} style={styles.summarySelectionText}>{booking.selectedHotel?.name}</Text>)}
+          {selectedStays.map((booking) => <HotelSummaryItem key={booking.id} booking={booking} />)}
         </SummarySelection>
         <View style={styles.totalBox}>
           <Text style={styles.totalLabel}>Estimated total</Text>
           <Heading size="sm">{formatInr(estimatedTotal)}</Heading>
         </View>
         {message ? <Text style={StyleSheet.flatten([styles.summaryMessage, (message.includes('failed') || message.includes('required')) && styles.summaryMessageError])}>{message}</Text> : null}
-        <Button variant="secondary" onPress={onFinishedBooking} disabled={!canBook} icon={<ExternalLink size={16} color={colors.text} />}>I've finished booking</Button>
+        <Button variant="secondary" onPress={onFinishedBooking} disabled={!canBook || trip.syncStatus === 'syncing'} icon={<ExternalLink size={16} color={colors.text} />}>{trip.syncStatus === 'syncing' ? 'Saving...' : "I've finished booking"}</Button>
       </Stack>
     </Card>
   );
@@ -756,6 +985,40 @@ function SummaryStatus({ label, value, ready }: { label: string; value: string; 
   );
 }
 
+function TransportSummaryItem({ booking, travelerCount, fallbackDate }: { booking: TransportBooking; travelerCount: number; fallbackDate?: string }) {
+  const option = booking.selectedOption;
+  if (!option) return null;
+  const icon = option.type === 'train' ? <Train size={14} color={colors.primary} /> : <Plane size={14} color={colors.primary} />;
+  return (
+    <View style={styles.summaryItem}>
+      <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
+        {icon}
+        <Text style={styles.summaryItemTitle} numberOfLines={1} ellipsizeMode="tail">{option.provider} {option.code}</Text>
+      </Row>
+      <Text style={styles.summaryItemMeta}>{booking.source.city} to {booking.destination.city} · {dateLabel(booking.date || fallbackDate)}</Text>
+      <Text style={styles.summaryItemMeta}>{formatTransportTime(option.departureTime)} - {formatTransportTime(option.arrivalTime)} · {option.duration} · {option.stops}</Text>
+      <Text style={styles.summaryItemPrice}>{formatInr(option.pricePerTraveler * travelerCount)} total</Text>
+    </View>
+  );
+}
+
+function HotelSummaryItem({ booking }: { booking: StayBooking }) {
+  const hotel = booking.selectedHotel;
+  if (!hotel) return null;
+  const nights = daysBetween(booking.checkIn, booking.checkOut);
+  return (
+    <View style={styles.summaryItem}>
+      <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
+        <BedDouble size={14} color={colors.primary} />
+        <Text style={styles.summaryItemTitle} numberOfLines={1} ellipsizeMode="tail">{hotel.name}</Text>
+      </Row>
+      <Text style={styles.summaryItemMeta}>{booking.city.city} · {dateLabel(booking.checkIn)} to {dateLabel(booking.checkOut)}</Text>
+      <Text style={styles.summaryItemMeta}>{hotel.area} · {nights} night{nights === 1 ? '' : 's'} · {hotel.rating > 0 ? `${hotel.rating.toFixed(1)} rating` : 'New'}</Text>
+      <Text style={styles.summaryItemPrice}>{formatInr(hotel.pricePerNight * nights)} total</Text>
+    </View>
+  );
+}
+
 function SummarySelection({ title, empty, children }: { title: string; empty: string; children: ReactNode }) {
   return (
     <Stack gap={spacing.xs}>
@@ -764,18 +1027,6 @@ function SummarySelection({ title, empty, children }: { title: string; empty: st
     </Stack>
   );
 }
-
-const webDateInputStyle: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  border: 0,
-  outline: 'none',
-  background: 'transparent',
-  color: colors.text,
-  fontFamily: "'Plus Jakarta Sans', Arial, sans-serif",
-  fontSize: 15,
-  fontWeight: 700
-};
 
 const styles = StyleSheet.create({
   hero: { backgroundImage: 'linear-gradient(135deg, #092141 0%, #17438D 58%, #2575F1 100%)' as never },
@@ -794,8 +1045,8 @@ const styles = StyleSheet.create({
   progressNumberText: { color: colors.surface, fontWeight: '900' },
   progressLabel: { color: colors.text, fontWeight: '900' },
   progressState: { color: colors.muted, fontSize: 12, fontWeight: '700' },
-  bookingMain: { flex: 1, minWidth: 0 },
-  bookingSection: { borderRadius: 14, borderColor: '#D7E7FF', backgroundColor: '#FFFFFF' },
+  bookingMain: { flex: 1, minWidth: 0, overflow: 'visible' },
+  bookingSection: { borderRadius: 14, borderColor: '#D7E7FF', backgroundColor: '#FFFFFF', overflow: 'visible' },
   sectionHeader: { justifyContent: 'space-between', alignItems: 'center' },
   organizerCard: { borderColor: '#BFDBFE', backgroundColor: '#F8FBFF' },
   organizerHeader: { alignItems: 'center', justifyContent: 'flex-start', gap: spacing.md },
@@ -807,9 +1058,26 @@ const styles = StyleSheet.create({
   inputLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
   numericInput: { minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.surface, paddingHorizontal: spacing.md, color: colors.text, fontSize: 15, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
   segmentHeader: { justifyContent: 'space-between', alignItems: 'center', padding: spacing.md, borderRadius: 12, backgroundColor: '#EBF2FE', borderWidth: 1, borderColor: '#D7E7FF' },
-  searchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, alignItems: 'flex-end' },
+  searchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, alignItems: 'flex-end', overflow: 'visible', zIndex: 30 },
   searchInput: { flexGrow: 1, flexBasis: 180, minWidth: 180 },
+  datePickerField: { position: 'relative', zIndex: 50, overflow: 'visible' },
+  dateFieldAnchor: { gap: spacing.xs },
   dateInputShell: { minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.surface, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dateInputText: { flex: 1, color: colors.text, fontSize: 15, fontWeight: '700' },
+  datePlaceholder: { color: 'rgba(90,100,128,0.5)' },
+  calendarModalOverlay: { flex: 1, backgroundColor: 'transparent' },
+  calendarPopover: { position: 'absolute', zIndex: 1000 },
+  calendarPanel: { width: '100%', borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 12, backgroundColor: '#FFFFFF', padding: spacing.md, gap: spacing.sm, shadowColor: '#092141', shadowOpacity: 0.12, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
+  calendarNav: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceMuted },
+  calendarMonth: { color: colors.primaryDark, fontSize: 14, fontWeight: '900' },
+  weekGrid: { width: 276, flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignContent: 'flex-start' },
+  weekLabel: { width: 36, textAlign: 'center', color: colors.muted, fontSize: 11, fontWeight: '800' },
+  dayCell: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  dayCellDisabled: { opacity: 0.38 },
+  dayCellSelected: { backgroundColor: colors.primary },
+  dayText: { fontSize: 13, fontWeight: '700' },
+  dayTextDisabled: { color: colors.muted },
+  dayTextSelected: { color: colors.surface },
   searchButton: { minWidth: 120 },
   transportCarousel: { gap: spacing.md, paddingRight: spacing.lg },
   carouselArrow: { width: 36, height: 36, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
@@ -877,10 +1145,15 @@ const styles = StyleSheet.create({
   itineraryDayTitle: { fontSize: 13, fontWeight: '900' },
   itineraryDayText: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   summary: { width: '100%', marginTop: -1, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderColor: '#D7E7FF' },
+  tripCodeText: { color: colors.primary, fontSize: 13, fontWeight: '900' },
   summaryChecklist: { borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 12, overflow: 'hidden', backgroundColor: '#F8FBFF' },
   summaryStatusRow: { minHeight: 42, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: '#E6EEF9' },
   summaryStatusLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
   summarySelectionText: { color: colors.text, fontSize: 13, fontWeight: '900' },
+  summaryItem: { borderWidth: 1, borderColor: '#D7E7FF', borderRadius: 8, backgroundColor: '#F8FBFF', padding: spacing.sm, gap: 3 },
+  summaryItemTitle: { flex: 1, minWidth: 0, color: colors.text, fontSize: 13, fontWeight: '900' },
+  summaryItemMeta: { color: colors.muted, fontSize: 12, lineHeight: 17, fontWeight: '700' },
+  summaryItemPrice: { color: colors.primaryDark, fontSize: 13, fontWeight: '900' },
   summaryEmpty: { color: colors.text, fontSize: 13 },
   totalBox: { borderRadius: 12, backgroundColor: '#EBF2FE', borderWidth: 1, borderColor: '#BFDBFE', padding: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   totalLabel: { color: colors.primaryDark, fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0 },

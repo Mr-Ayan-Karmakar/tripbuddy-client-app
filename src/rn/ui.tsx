@@ -58,7 +58,7 @@ export function Button({ children, onPress, variant = 'primary', icon, style, di
   );
 }
 
-export function Input({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline, style }: { label: string; value: string; onChangeText: (value: string) => void; placeholder?: string; keyboardType?: 'default' | 'numeric' | 'email-address'; multiline?: boolean; style?: StyleProp<ViewStyle> }) {
+export function Input({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline, style, secureTextEntry, autoCapitalize }: { label: string; value: string; onChangeText: (value: string) => void; placeholder?: string; keyboardType?: 'default' | 'numeric' | 'email-address'; multiline?: boolean; style?: StyleProp<ViewStyle>; secureTextEntry?: boolean; autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters' }) {
   return (
     <Stack gap={spacing.xs} style={style}>
       <Text style={styles.label}>{label}</Text>
@@ -70,6 +70,8 @@ export function Input({ label, value, onChangeText, placeholder, keyboardType = 
         placeholderTextColor="rgba(90,100,128,0.5)"
         keyboardType={keyboardType}
         multiline={multiline}
+        secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
         style={StyleSheet.flatten([styles.input, multiline && styles.textarea])}
       />
     </Stack>

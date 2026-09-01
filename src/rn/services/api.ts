@@ -1,15 +1,39 @@
-import { Activity, DayPlan, HotelOption, Pace, TransportOption, TransportType } from '../types';
+import { Platform } from 'react-native';
+import { Activity, DayPlan, HotelOption, Pace, SavedTrip, TransportBooking, TransportOption, TransportType, Traveler, Trip, StayBooking } from '../types';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
 type Tokens = {
   accessToken: string;
   refreshToken: string;
+  expiresIn?: number;
+  session?: AuthSession;
+};
+
+export type AuthSession = {
+  id: string;
+  type: 'GUEST' | 'ACCOUNT';
+  accountId: string | null;
+  expiresAt?: number;
+};
+
+export type Account = {
+  id: string;
+  email: string;
 };
 
 type Envelope<T> = {
   success: boolean;
   data: T;
+};
+
+type ErrorEnvelope = {
+  success?: boolean;
+  error?: string | {
+    code?: string;
+    message?: string;
+  };
+  message?: string;
 };
 
 type AvailabilityDto = {
@@ -123,17 +147,16 @@ type ApiPlaceReview = {
 
 let tokens: Tokens | undefined;
 let tokenPromise: Promise<string> | undefined;
+const AUTH_STORAGE_KEY = 'tripbuddy.auth.v1';
 
 export async function getAccessToken(forceRefresh = false) {
-  if (forceRefresh) tokens = undefined;
+  tokens ??= loadTokens();
   if (!forceRefresh && tokens?.accessToken) return tokens.accessToken;
   if (tokenPromise) return tokenPromise;
-  tokenPromise = fetch(`${API_BASE_URL}/auth/api/guest`, { method: 'POST' })
-    .then(async (response) => {
-      if (!response.ok) throw new Error('Unable to create guest session.');
-      const body = (await response.json()) as Envelope<Tokens>;
-      tokens = body.data;
-      return body.data.accessToken;
+  tokenPromise = (forceRefresh && tokens?.refreshToken ? refreshSession(tokens.refreshToken) : createGuestSession())
+    .then((nextTokens) => {
+      setTokens(nextTokens);
+      return nextTokens.accessToken;
     })
     .finally(() => {
       tokenPromise = undefined;
@@ -142,24 +165,200 @@ export async function getAccessToken(forceRefresh = false) {
 }
 
 async function post<TResponse, TBody>(path: string, body: TBody, retryOnExpiredToken = true): Promise<TResponse> {
-  const token = await getAccessToken(!retryOnExpiredToken);
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authorizedFetch(path, {
     method: 'POST',
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json'
-    },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body)
   });
   const text = await response.text();
   const payload = text ? JSON.parse(text) : undefined;
   if (!response.ok) {
-    const message = typeof payload?.error === 'string' ? payload.error : response.statusText;
-    if (retryOnExpiredToken && response.status === 401 && message === 'Access token expired.') {
+    const message = payloadError(payload) ?? response.statusText;
+    if (retryOnExpiredToken && isAccessTokenExpired(response, payload)) {
+      await getAccessToken(true);
       return post<TResponse, TBody>(path, body, false);
     }
     throw new Error(message);
   }
+  return payload as TResponse;
+}
+
+async function patch<TResponse, TBody>(path: string, body: TBody, retryOnExpiredToken = true): Promise<TResponse> {
+  const response = await authorizedFetch(path, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : undefined;
+  if (!response.ok) {
+    const message = payloadError(payload) ?? response.statusText;
+    if (retryOnExpiredToken && isAccessTokenExpired(response, payload)) {
+      await getAccessToken(true);
+      return patch<TResponse, TBody>(path, body, false);
+    }
+    throw new Error(message);
+  }
+  return payload as TResponse;
+}
+
+async function get<TResponse>(path: string, retryOnExpiredToken = true): Promise<TResponse> {
+  const response = await authorizedFetch(path, { method: 'GET' });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : undefined;
+  if (!response.ok) {
+    const message = payloadError(payload) ?? response.statusText;
+    if (retryOnExpiredToken && isAccessTokenExpired(response, payload)) {
+      await getAccessToken(true);
+      return get<TResponse>(path, false);
+    }
+    throw new Error(message);
+  }
+  return payload as TResponse;
+}
+
+async function deleteRequest(path: string, retryOnExpiredToken = true): Promise<void> {
+  const response = await authorizedFetch(path, { method: 'DELETE' });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : undefined;
+  if (!response.ok) {
+    const message = payloadError(payload) ?? response.statusText;
+    if (retryOnExpiredToken && isAccessTokenExpired(response, payload)) {
+      await getAccessToken(true);
+      return deleteRequest(path, false);
+    }
+    throw new Error(message);
+  }
+}
+
+async function authorizedFetch(path: string, init: RequestInit) {
+  const token = await getAccessToken();
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(init.headers ?? {})
+    }
+  });
+}
+
+function payloadError(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as ErrorEnvelope;
+  if (typeof record.error === 'string') return record.error;
+  if (typeof record.error?.message === 'string') return record.error.message;
+  return record.message;
+}
+
+function payloadErrorCode(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as ErrorEnvelope;
+  return typeof record.error === 'object' ? record.error.code : undefined;
+}
+
+function isAccessTokenExpired(response: Response, payload: unknown) {
+  return response.status === 401 && payloadErrorCode(payload) === 'ACCESS_TOKEN_EXPIRED';
+}
+
+async function createGuestSession(): Promise<Tokens> {
+  const response = await fetch(`${API_BASE_URL}/auth/api/guest`, { method: 'POST' });
+  if (!response.ok) throw new Error('Unable to create guest session.');
+  const body = (await response.json()) as Envelope<Tokens>;
+  return body.data;
+}
+
+async function refreshSession(refreshToken: string): Promise<Tokens> {
+  const response = await fetch(`${API_BASE_URL}/auth/api/refresh`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ refreshToken })
+  });
+  if (!response.ok) return createGuestSession();
+  const body = (await response.json()) as Envelope<Tokens>;
+  return body.data;
+}
+
+function setTokens(nextTokens: Tokens | undefined) {
+  tokens = nextTokens;
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  try {
+    if (nextTokens) window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextTokens));
+    else window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable in private browsing or embedded webviews.
+  }
+}
+
+function loadTokens(): Tokens | undefined {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as Tokens : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function getCurrentAuth(): Promise<{ session: AuthSession; account: Account | null }> {
+  const result = await get<Envelope<{ session: AuthSession; account: Account | null }>>('/auth/api/me');
+  return result.data;
+}
+
+export async function sendOtp(input: { email: string; purpose: 'signup' | 'login' | 'trip_recovery' | 'password_reset' }) {
+  await publicPost('/auth/api/otp/send', input);
+}
+
+export async function register(input: { email: string; password: string; otp: string }): Promise<{ session: AuthSession; account: Account }> {
+  await getAccessToken();
+  const result = await post<Envelope<Tokens & { account: Account }>, typeof input>('/auth/api/register', input);
+  setTokens(result.data);
+  return { session: result.data.session!, account: result.data.account };
+}
+
+export async function login(input: { email: string; password: string }): Promise<{ session: AuthSession; account: Account }> {
+  const result = await publicPost<Envelope<Tokens & { account: Account }>, typeof input>('/auth/api/login', input);
+  setTokens(result.data);
+  return { session: result.data.session!, account: result.data.account };
+}
+
+export async function logout() {
+  try {
+    await authorizedFetch('/auth/api/logout', { method: 'POST' });
+  } finally {
+    setTokens(undefined);
+  }
+}
+
+export async function deleteAccount() {
+  try {
+    await deleteRequest('/auth/api/account');
+  } finally {
+    setTokens(undefined);
+  }
+}
+
+export async function startPasswordReset(email: string) {
+  await publicPost('/auth/api/password-reset/start', { email });
+}
+
+export async function verifyPasswordReset(input: { email: string; otp: string }): Promise<{ resetToken: string; expiresIn: number }> {
+  const result = await publicPost<Envelope<{ resetToken: string; expiresIn: number }>, typeof input>('/auth/api/password-reset/verify', input);
+  return result.data;
+}
+
+export async function completePasswordReset(input: { resetToken: string; newPassword: string }) {
+  await publicPost('/auth/api/password-reset/complete', input);
+}
+
+async function publicPost<TResponse = unknown, TBody = unknown>(path: string, body: TBody): Promise<TResponse> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : undefined;
+  if (!response.ok) throw new Error(payloadError(payload) ?? response.statusText);
   return payload as TResponse;
 }
 
@@ -192,7 +391,8 @@ async function generateItineraryWithToken(input: GenerateItineraryInput, retryOn
   if (!response.ok) {
     const text = await response.text();
     const message = errorMessageFromText(text) ?? response.statusText;
-    if (retryOnExpiredToken && response.status === 401 && message === 'Access token expired.') {
+    if (retryOnExpiredToken && response.status === 401 && errorCodeFromText(text) === 'ACCESS_TOKEN_EXPIRED') {
+      await getAccessToken(true);
       return generateItineraryWithToken(input, false);
     }
     throw new Error(message);
@@ -326,10 +526,18 @@ function addHoursToTime(value: string, hours: number) {
 function errorMessageFromText(value: string) {
   if (!value.trim()) return undefined;
   try {
-    const parsed = JSON.parse(value) as { error?: string; message?: string };
-    return parsed.error ?? parsed.message;
+    return payloadError(JSON.parse(value));
   } catch {
     return value;
+  }
+}
+
+function errorCodeFromText(value: string) {
+  if (!value.trim()) return undefined;
+  try {
+    return payloadErrorCode(JSON.parse(value));
+  } catch {
+    return undefined;
   }
 }
 
@@ -387,9 +595,315 @@ export async function searchHotels(input: { city: string; checkIn: string; check
   }));
 }
 
-export async function completeBookings(input: { transport: TransportOption[]; hotels: HotelOption[]; travelers: Array<{ fullName: string; age: number }>; source: string; destination: string; date: string; city: string; checkIn: string; checkOut: string; adults: number; children: number }) {
-  await Promise.all([
-    ...input.transport.map((selection) => post('/booking/api/transport/book', { selection: { provider: selection.provider, type: selection.type, available: true, seatsOrRooms: 1, price: selection.pricePerTraveler, currency: 'INR', details: selection.details, externalId: selection.id }, source: input.source, destination: input.destination, date: input.date, adults: input.adults, children: input.children, type: selection.type, travelers: input.travelers, documentsAccepted: true })),
-    ...input.hotels.map((selection) => post('/booking/api/hotel/book', { selection: { provider: selection.name, type: 'hotel', available: true, seatsOrRooms: 1, price: selection.pricePerNight, currency: 'INR', details: selection.details, externalId: selection.id }, city: input.city, checkIn: input.checkIn, checkOut: input.checkOut, adults: input.adults, children: input.children, rooms: 1, guests: input.travelers, documentsAccepted: true }))
-  ]);
+export type BookingResult = {
+  status: 'action_required' | 'confirmed';
+  bookingId: string;
+  message: string;
+  requiredActions?: string[];
+  ticket?: { fileName: string; mimeType: string; content: string };
+};
+
+export async function bookTransport(input: { booking: TransportBooking; travelers: Array<{ fullName: string; age: number }>; adults: number; children: number }): Promise<BookingResult> {
+  if (!input.booking.selectedOption) throw new Error('Choose a transport option first.');
+  const selection = input.booking.selectedOption;
+  return post<BookingResult, unknown>('/booking/api/transport/book', {
+    selection: {
+      provider: selection.provider,
+      type: selection.type,
+      available: true,
+      seatsOrRooms: selection.seatsAvailable ?? 1,
+      price: selection.pricePerTraveler,
+      currency: 'INR',
+      details: selection.details,
+      externalId: selection.id
+    },
+    source: input.booking.source.city,
+    destination: input.booking.destination.city,
+    date: input.booking.date,
+    adults: input.adults,
+    children: input.children,
+    type: selection.type,
+    travelers: input.travelers,
+    seatPreference: 'any',
+    mealPreference: selection.type === 'flight' ? 'none' : undefined,
+    documentsAccepted: true
+  });
+}
+
+export async function bookHotel(input: { booking: StayBooking; travelers: Array<{ fullName: string; age: number }>; adults: number; children: number }): Promise<BookingResult> {
+  if (!input.booking.selectedHotel) throw new Error('Choose a hotel first.');
+  const selection = input.booking.selectedHotel;
+  return post<BookingResult, unknown>('/booking/api/hotel/book', {
+    selection: {
+      provider: selection.name,
+      type: 'hotel',
+      available: true,
+      seatsOrRooms: input.booking.rooms,
+      price: selection.pricePerNight,
+      currency: 'INR',
+      details: selection.details,
+      externalId: selection.id
+    },
+    city: input.booking.city.city,
+    checkIn: input.booking.checkIn,
+    checkOut: input.booking.checkOut,
+    adults: input.adults,
+    children: input.children,
+    rooms: input.booking.rooms,
+    guests: input.travelers,
+    documentsAccepted: true
+  });
+}
+
+type ServerTrip = {
+  id: string;
+  tripCode: string;
+  source: Trip['source'];
+  destination: Trip['destination'];
+  startDate: string | null;
+  endDate: string | null;
+  days: number;
+  pace: Pace;
+  tripVibe?: string | null;
+  preferences?: string[];
+  status: string;
+  itinerary?: DayPlan[];
+  travelers?: Traveler[];
+  bookingSelections?: Array<{ clientBookingId: string; bookingType: 'TRANSPORT' | 'HOTEL'; segment: unknown; selection: unknown; status?: string }>;
+  bookingLinks?: Array<{ bookingType: 'TRANSPORT' | 'HOTEL'; externalBookingId: string; status: string }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function createServerTrip(trip: Trip): Promise<SavedTrip> {
+  const result = await post<Envelope<ServerTrip>, unknown>('/trip/api/trips', tripToServerPayload(trip));
+  return serverTripToSavedTrip(result.data);
+}
+
+export async function updateServerTrip(trip: Trip): Promise<SavedTrip> {
+  const id = trip.serverTripId ?? trip.tripCode;
+  if (!id) return createServerTrip(trip);
+  const result = await patch<Envelope<ServerTrip>, unknown>(`/trip/api/trips/${encodeURIComponent(id)}`, tripToServerPayload(trip));
+  return serverTripToSavedTrip(result.data);
+}
+
+export async function deleteServerTrip(trip: Pick<Trip, 'serverTripId' | 'tripCode'>): Promise<void> {
+  const id = trip.serverTripId ?? trip.tripCode;
+  if (!id) return;
+  await deleteRequest(`/trip/api/trips/${encodeURIComponent(id)}`);
+}
+
+export async function startTripDeleteOtp(trip: Pick<Trip, 'serverTripId' | 'tripCode'>): Promise<{ required: boolean; email?: string; expiresIn: number }> {
+  const id = trip.serverTripId ?? trip.tripCode;
+  if (!id) return { required: false, expiresIn: 0 };
+  const result = await post<Envelope<{ required: boolean; email?: string; expiresIn: number }>, Record<string, never>>(`/trip/api/trips/${encodeURIComponent(id)}/delete-otp/start`, {});
+  return result.data;
+}
+
+export async function verifyTripDeleteOtp(trip: Pick<Trip, 'serverTripId' | 'tripCode'>, otp: string): Promise<{ expiresIn: number }> {
+  const id = trip.serverTripId ?? trip.tripCode;
+  if (!id) return { expiresIn: 0 };
+  const result = await post<Envelope<{ expiresIn: number }>, { otp: string }>(`/trip/api/trips/${encodeURIComponent(id)}/delete-otp/verify`, { otp });
+  return result.data;
+}
+
+export async function emailServerTrip(trip: Pick<Trip, 'serverTripId' | 'tripCode'>, email?: string): Promise<{ sentTo: string }> {
+  const id = trip.serverTripId ?? trip.tripCode;
+  if (!id) throw new Error('Trip must be saved before emailing details.');
+  const result = await post<Envelope<{ sentTo: string }>, { email?: string }>(`/trip/api/trips/${encodeURIComponent(id)}/email`, email ? { email } : {});
+  return result.data;
+}
+
+export async function listServerTrips(): Promise<SavedTrip[]> {
+  const result = await get<Envelope<ServerTrip[]>>('/trip/api/trips');
+  return result.data.map(serverTripToSavedTrip);
+}
+
+export async function linkServerBooking(trip: Trip, input: { bookingType: 'TRANSPORT' | 'HOTEL'; externalBookingId: string; status: string; response: BookingResult }): Promise<SavedTrip> {
+  const id = trip.serverTripId ?? trip.tripCode;
+  if (!id) throw new Error('Trip must be saved before linking bookings.');
+  const result = await post<Envelope<ServerTrip>, unknown>(`/trip/api/trips/${encodeURIComponent(id)}/bookings/link`, input);
+  return serverTripToSavedTrip(result.data);
+}
+
+export async function startTripRecovery(input: { tripCode: string; organizerEmail: string }) {
+  await publicPost('/trip/api/recovery/start', input);
+}
+
+export async function verifyTripRecovery(input: { tripCode: string; organizerEmail: string; otp: string }): Promise<{ recoveryToken: string; expiresIn: number }> {
+  const result = await publicPost<Envelope<{ recoveryToken: string; expiresIn: number }>, typeof input>('/trip/api/recovery/verify', input);
+  return result.data;
+}
+
+export async function fetchRecoveredTrip(input: { tripCode: string; recoveryToken: string }): Promise<SavedTrip> {
+  const response = await fetch(`${API_BASE_URL}/trip/api/recovery/${encodeURIComponent(input.tripCode)}`, {
+    headers: { 'x-trip-recovery-token': input.recoveryToken }
+  });
+  const body = await response.json();
+  if (!response.ok) throw new Error(payloadError(body) ?? response.statusText);
+  return serverTripToSavedTrip((body as Envelope<ServerTrip>).data);
+}
+
+export async function claimRecoveredTrip(input: { tripCode: string; recoveryToken: string }): Promise<SavedTrip> {
+  const result = await post<Envelope<ServerTrip>, { recoveryToken: string }>(`/trip/api/recovery/${encodeURIComponent(input.tripCode)}/claim`, { recoveryToken: input.recoveryToken });
+  return serverTripToSavedTrip(result.data);
+}
+
+function tripToServerPayload(trip: Trip) {
+  return {
+    organizerEmail: trip.travelers.find((traveler) => traveler.role === 'organizer')?.email ?? '',
+    source: trip.source,
+    destination: trip.destination,
+    startDate: normalizeIsoDate(trip.startDate),
+    endDate: normalizeIsoDate(trip.endDate),
+    days: trip.days,
+    pace: trip.pace,
+    tripVibe: trip.tripVibe,
+    preferences: trip.preferences,
+    itinerary: trip.itinerary,
+    travelers: trip.travelers,
+    bookingSelections: [
+      ...trip.transportBookings.filter((booking) => booking.selectedOption).map((booking) => ({
+        clientBookingId: booking.id,
+        bookingType: 'TRANSPORT' as const,
+        segment: { source: booking.source, destination: booking.destination, date: booking.date, type: booking.type, journeyName: booking.journeyName },
+        selection: booking.selectedOption,
+        status: booking.status
+      })),
+      ...trip.stayBookings.filter((booking) => booking.selectedHotel).map((booking) => ({
+        clientBookingId: booking.id,
+        bookingType: 'HOTEL' as const,
+        segment: { city: booking.city, area: booking.area, checkIn: booking.checkIn, checkOut: booking.checkOut, rooms: booking.rooms, stayName: booking.stayName },
+        selection: booking.selectedHotel,
+        status: booking.status
+      }))
+    ],
+    status: trip.transportBookings.some((booking) => booking.status === 'Booked') || trip.stayBookings.some((booking) => booking.status === 'Booked')
+      ? 'BOOKED'
+      : trip.transportBookings.some((booking) => booking.selectedOption) || trip.stayBookings.some((booking) => booking.selectedHotel)
+        ? 'BOOKING_IN_PROGRESS'
+        : trip.itinerary.length
+          ? 'ITINERARY_READY'
+          : 'DRAFT'
+  };
+}
+
+function normalizeIsoDate(value: unknown) {
+  if (!value) return '';
+  const dateOnly = value instanceof Date ? toLocalIsoDate(value) : String(value).trim().slice(0, 10);
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
+  if (!parts) return '';
+  const [, yearPart, monthPart, dayPart] = parts;
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day ? '' : dateOnly;
+}
+
+function toLocalIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function serverTripToSavedTrip(serverTrip: ServerTrip): SavedTrip {
+  const source = serverTrip.source ?? { id: '', name: '', city: '' };
+  const destination = serverTrip.destination ?? { id: '', name: '', city: '' };
+  const itinerary = Array.isArray(serverTrip.itinerary) ? serverTrip.itinerary : [];
+  const derivedDates = deriveTripDates(serverTrip, itinerary);
+  const startDate = normalizeIsoDate(serverTrip.startDate) || derivedDates.startDate;
+  const endDate = normalizeIsoDate(serverTrip.endDate) || derivedDates.endDate || startDate;
+  return {
+    serverTripId: serverTrip.id,
+    tripCode: serverTrip.tripCode,
+    syncStatus: 'synced',
+    id: serverTrip.tripCode,
+    createdAt: serverTrip.createdAt,
+    updatedAt: serverTrip.updatedAt,
+    source,
+    destination,
+    startDate,
+    endDate,
+    days: serverTrip.days,
+    pace: serverTrip.pace,
+    tripVibe: serverTrip.tripVibe ?? '',
+    preferences: Array.isArray(serverTrip.preferences) ? serverTrip.preferences : [],
+    travelers: restoreTravelers(serverTrip.travelers),
+    itinerary,
+    transportBookings: restoreTransportBookings(serverTrip, source, destination),
+    stayBookings: restoreStayBookings(serverTrip, destination)
+  };
+}
+
+function deriveTripDates(serverTrip: ServerTrip, itinerary: DayPlan[]) {
+  const dates = [
+    ...itinerary.map((day) => day.date),
+    ...(serverTrip.bookingSelections ?? []).flatMap((selection) => {
+      const segment = selection.segment as Record<string, unknown>;
+      return [segment.date, segment.checkIn, segment.checkOut];
+    })
+  ].map(normalizeIsoDate).filter(Boolean).sort();
+  return {
+    startDate: dates[0] ?? '',
+    endDate: dates.at(-1) ?? ''
+  };
+}
+
+function restoreTravelers(travelers?: Traveler[]): Traveler[] {
+  const values = Array.isArray(travelers) ? travelers : [];
+  if (values.some((traveler) => traveler.role === 'organizer')) return values;
+  return [{ id: 'traveler-organizer', fullName: 'Trip organizer', age: 18, email: '', role: 'organizer' }, ...values];
+}
+
+function restoreTransportBookings(serverTrip: ServerTrip, source: Trip['source'], destination: Trip['destination']): TransportBooking[] {
+  const selections = (serverTrip.bookingSelections ?? []).filter((selection) => selection.bookingType === 'TRANSPORT');
+  const links = serverTrip.bookingLinks ?? [];
+  const startDate = normalizeIsoDate(serverTrip.startDate);
+  if (!selections.length) {
+    return [{ id: 'transport-1', journeyName: 'Journey 1', source, destination, date: startDate, type: 'flight', status: 'Not selected' }];
+  }
+  return selections.map((selection) => {
+    const segment = selection.segment as Partial<TransportBooking>;
+    const selectedOption = selection.selection as TransportOption;
+    const link = links.find((item) => item.bookingType === 'TRANSPORT');
+    return {
+      id: selection.clientBookingId,
+      journeyName: segment.journeyName ?? 'Journey',
+      source: segment.source ?? source,
+      destination: segment.destination ?? destination,
+      date: normalizeIsoDate(segment.date) || startDate,
+      type: selectedOption.type ?? segment.type ?? 'flight',
+      selectedOption,
+      status: link?.status === 'confirmed' ? 'Booked' : 'Selected',
+      externalBookingId: link?.externalBookingId
+    };
+  });
+}
+
+function restoreStayBookings(serverTrip: ServerTrip, destination: Trip['destination']): StayBooking[] {
+  const selections = (serverTrip.bookingSelections ?? []).filter((selection) => selection.bookingType === 'HOTEL');
+  const links = serverTrip.bookingLinks ?? [];
+  const startDate = normalizeIsoDate(serverTrip.startDate);
+  const endDate = normalizeIsoDate(serverTrip.endDate);
+  if (!selections.length) {
+    return [{ id: 'stay-1', stayName: 'Stay 1', city: destination, area: destination.city, checkIn: startDate, checkOut: endDate, rooms: 1, status: 'Not selected' }];
+  }
+  return selections.map((selection) => {
+    const segment = selection.segment as Partial<StayBooking>;
+    const link = links.find((item) => item.bookingType === 'HOTEL');
+    return {
+      id: selection.clientBookingId,
+      stayName: segment.stayName ?? 'Stay',
+      city: segment.city ?? destination,
+      area: segment.area ?? destination.city,
+      checkIn: normalizeIsoDate(segment.checkIn) || startDate,
+      checkOut: normalizeIsoDate(segment.checkOut) || endDate,
+      rooms: segment.rooms ?? 1,
+      selectedHotel: selection.selection as HotelOption,
+      status: link?.status === 'confirmed' ? 'Booked' : 'Selected',
+      externalBookingId: link?.externalBookingId
+    };
+  });
 }

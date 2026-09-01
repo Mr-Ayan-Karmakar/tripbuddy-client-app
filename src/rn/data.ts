@@ -42,10 +42,25 @@ export function createDefaultTrip(): Trip {
 }
 
 export function formatInr(value: number) {
-  return `Rs ${Math.round(value).toLocaleString('en-IN')}`;
+  const amount = Number.isFinite(value) ? value : 0;
+  return `Rs ${Math.round(amount).toLocaleString('en-IN')}`;
 }
 
 export function daysBetween(start: string, end: string) {
-  const ms = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime();
+  const startMs = isoDateMs(start);
+  const endMs = isoDateMs(end);
+  if (startMs === null || endMs === null) return 1;
+  const ms = endMs - startMs;
   return Math.max(1, Math.round(ms / 86_400_000));
+}
+
+function isoDateMs(value: string) {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!parts) return null;
+  const [, yearPart, monthPart, dayPart] = parts;
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day ? null : date.getTime();
 }
