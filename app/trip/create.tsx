@@ -80,7 +80,7 @@ export default function PlannerRoute() {
       const preserveBookings = Boolean(plannerInput.preserveBookings)
         && source.trim().toLowerCase() === trip.source.city.trim().toLowerCase()
         && destination.trim().toLowerCase() === trip.destination.city.trim().toLowerCase();
-      const itinerary = await generateItinerary({
+      const generatedItinerary = await generateItinerary({
         source,
         destination,
         startDate,
@@ -90,7 +90,18 @@ export default function PlannerRoute() {
         pace,
         prompt
       });
-      setDraft({ source, destination, startDate, days: numericDays, pace, preferences, preferenceText: tripIdea, endDate, itinerary, preserveBookings });
+      setDraft({
+        source,
+        destination,
+        startDate,
+        days: numericDays,
+        pace,
+        preferences,
+        preferenceText: generatedItinerary.tripVibe ?? trimmedTripVibe,
+        endDate,
+        itinerary: generatedItinerary.days,
+        preserveBookings
+      });
       router.push('/trip/itinerary');
     } catch (error) {
       setGenerateError(error instanceof Error ? error.message : 'Unable to generate itinerary.');

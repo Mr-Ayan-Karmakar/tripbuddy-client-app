@@ -1,0 +1,5 @@
+Introduce redis caching, for tripvibe in itinerary service:
+- Store city and places indexes in the redis based on tripvibe, with max 1lakh entries, and delete the least recently used vibe(make the 1lakh configurable via .env)
+- if user provides tripvibe, first check the cache, if not found then make API call to gemini, provide all the cached tripvibes list for that city, and if gemini should respond with the matching trip vibe, otherwise for valid(non rubbish- for this we'll show error like, invalid trip vibe) vibes gemini will give the proper vibe name.
+- From above gemini response if tripvibe already cached, then algorithm should use the cached places array.
+If non cached, then we'll call gemini API, with all the places stored in DB and gemini will respond all the matching(with the trip vibe) places index, and we'll store this in redis cache as mentioned in the first point.

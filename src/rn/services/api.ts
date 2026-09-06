@@ -88,7 +88,15 @@ type GenerateItineraryInput = {
   pace: Pace;
 };
 
+export type GeneratedItinerary = {
+  days: DayPlan[];
+  tripVibe?: string;
+};
+
 type ItineraryStreamOutput = {
+  input?: {
+    tripVibe?: string;
+  };
   itinerary?: {
     days?: ApiItineraryDay[];
     summary?: string;
@@ -362,11 +370,11 @@ async function publicPost<TResponse = unknown, TBody = unknown>(path: string, bo
   return payload as TResponse;
 }
 
-export async function generateItinerary(input: GenerateItineraryInput): Promise<DayPlan[]> {
+export async function generateItinerary(input: GenerateItineraryInput): Promise<GeneratedItinerary> {
   return generateItineraryWithToken(input, true);
 }
 
-async function generateItineraryWithToken(input: GenerateItineraryInput, retryOnExpiredToken: boolean): Promise<DayPlan[]> {
+async function generateItineraryWithToken(input: GenerateItineraryInput, retryOnExpiredToken: boolean): Promise<GeneratedItinerary> {
   const token = await getAccessToken(!retryOnExpiredToken);
   const response = await fetch(`${API_BASE_URL}/itinerary/api/stream`, {
     method: 'POST',
@@ -401,7 +409,10 @@ async function generateItineraryWithToken(input: GenerateItineraryInput, retryOn
   const output = await readItineraryStream(response);
   const days = output.itinerary?.days ?? output.days ?? [];
   if (!days.length) throw new Error('No itinerary days were returned.');
-  return days.map(mapItineraryDay);
+  return {
+    days: days.map(mapItineraryDay),
+    tripVibe: output.input?.tripVibe?.trim() || input.tripVibe?.trim()
+  };
 }
 
 async function readItineraryStream(response: Response): Promise<ItineraryStreamOutput> {
@@ -423,13 +434,14 @@ async function readItineraryStream(response: Response): Promise<ItineraryStreamO
     for (const part of parts) {
       const event = parseSseEvent(part);
       if (event.name === 'token' && typeof event.data === 'string') tokenBuffer += event.data;
-      if (event.name === 'error') throw new Error(typeof event.data?.message === 'string' ? event.data.message : 'Itinerary generation failed.');
+      if (event.name === 'error') throw itineraryStreamError(event.data);
     }
   }
 
   if (sseBuffer.trim()) {
     const event = parseSseEvent(sseBuffer);
     if (event.name === 'token' && typeof event.data === 'string') tokenBuffer += event.data;
+    if (event.name === 'error') throw itineraryStreamError(event.data);
   }
 
   return parseTokenBuffer(tokenBuffer);
@@ -441,7 +453,7 @@ function parseSseText(value: string): ItineraryStreamOutput {
     if (!part.trim()) continue;
     const event = parseSseEvent(part);
     if (event.name === 'token' && typeof event.data === 'string') tokenBuffer += event.data;
-    if (event.name === 'error') throw new Error(typeof event.data?.message === 'string' ? event.data.message : 'Itinerary generation failed.');
+    if (event.name === 'error') throw itineraryStreamError(event.data);
   }
   return parseTokenBuffer(tokenBuffer);
 }
@@ -454,6 +466,18 @@ function parseSseEvent(chunk: string) {
     name: eventLine?.slice(6).trim(),
     data: rawData ? JSON.parse(rawData) : undefined
   };
+}
+
+function itineraryStreamError(data: unknown) {
+  if (data && typeof data === 'object') {
+    const record = data as { code?: unknown; message?: unknown };
+    const message = typeof record.message === 'string' ? record.message : undefined;
+    if (record.code === 'INVALID_TRIP_VIBE') {
+      return new Error(message ?? 'Invalid trip vibe. Try a meaningful travel preference, such as family, heritage, adventure, nightlife, or spiritual.');
+    }
+    if (message) return new Error(message);
+  }
+  return new Error('Itinerary generation failed.');
 }
 
 function parseTokenBuffer(value: string): ItineraryStreamOutput {
