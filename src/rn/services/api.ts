@@ -93,6 +93,47 @@ export type GeneratedItinerary = {
   tripVibe?: string;
 };
 
+export type MoveItineraryPlaceInput = {
+  trip: Trip;
+  sourceDayIndex: number;
+  targetDayIndex: number;
+  sourcePlaceIds: string[];
+  targetPlaceIds: string[];
+  insertIndex: number;
+  placeId: string;
+  movedPlaceStartTime?: string;
+  targetFirstActivityStartTime?: string;
+  durationOverrides: Record<string, number>;
+};
+
+export type MoveItineraryPlaceResult = {
+  sourceDay?: DayPlan;
+  targetDay: DayPlan;
+  warnings: string[];
+};
+
+export type CachedItineraryPlace = {
+  id: string;
+  name: string;
+  area?: string;
+  reason?: string;
+  rank?: number;
+  durationHours?: number;
+  photoUrls?: string[];
+  openingHours?: string | string[];
+};
+
+export type RemainingItineraryPlacesResult = {
+  places: CachedItineraryPlace[];
+  total: number;
+  hasMore: boolean;
+};
+
+type ItineraryDayEditResult = {
+  day: DayPlan;
+  warnings: string[];
+};
+
 type ItineraryStreamOutput = {
   input?: {
     tripVibe?: string;
@@ -113,9 +154,15 @@ type ApiItineraryDay = {
   title?: string;
   restDay?: boolean;
   activities?: ApiItineraryActivity[];
+  lunchBreak?: {
+    startTime?: string;
+    endTime?: string;
+    durationHours?: number;
+  };
 };
 
 type ApiItineraryActivity = {
+  placeId?: string;
   time?: string;
   place?: string;
   name?: string;
@@ -123,17 +170,26 @@ type ApiItineraryActivity = {
   location?: string;
   area?: string;
   durationHours?: number;
+  visitDurationMinutes?: number;
   duration?: string;
   notes?: string;
   description?: string;
   rating?: number;
   photoUrls?: string[];
   bestTimeOfDay?: string;
+  openingHours?: string | string[];
+  geo?: {
+    lat?: number;
+    lng?: number;
+  };
   restaurants?: ApiRestaurant[];
   reviews?: ApiPlaceReview[];
   travelFromPrevious?: {
+    distanceSource?: 'database' | 'client-routing-required';
     durationText?: string;
     distanceText?: string;
+    distanceMeters?: number;
+    durationSeconds?: number;
     recommendation?: string;
   };
 };
@@ -265,7 +321,14 @@ function payloadErrorCode(payload: unknown) {
 }
 
 function isAccessTokenExpired(response: Response, payload: unknown) {
-  return response.status === 401 && payloadErrorCode(payload) === 'ACCESS_TOKEN_EXPIRED';
+  return response.status === 401 && (
+    payloadErrorCode(payload) === 'ACCESS_TOKEN_EXPIRED'
+    || isAccessTokenExpiredMessage(payloadError(payload))
+  );
+}
+
+function isAccessTokenExpiredMessage(message?: string) {
+  return message?.trim().toLowerCase().replace(/\.$/, '') === 'access token expired';
 }
 
 async function createGuestSession(): Promise<Tokens> {
@@ -374,6 +437,137 @@ export async function generateItinerary(input: GenerateItineraryInput): Promise<
   return generateItineraryWithToken(input, true);
 }
 
+export async function moveItineraryPlace(input: MoveItineraryPlaceInput): Promise<MoveItineraryPlaceResult> {
+  const result = await post<{
+    ok?: boolean;
+    sourceDay?: ApiItineraryDay;
+    targetDay?: ApiItineraryDay;
+    warnings?: string[];
+    message?: string;
+  }, unknown>('/itinerary/api/itinerary-edit/move-place', {
+    trip: itineraryEditTrip(input.trip),
+    sourceDayIndex: input.sourceDayIndex,
+    targetDayIndex: input.targetDayIndex,
+    sourcePlaceIds: input.sourcePlaceIds,
+    targetPlaceIds: input.targetPlaceIds,
+    insertIndex: input.insertIndex,
+    placeId: input.placeId,
+    ...(input.movedPlaceStartTime ? { movedPlaceStartTime: input.movedPlaceStartTime } : {}),
+    ...(input.targetFirstActivityStartTime ? { targetFirstActivityStartTime: input.targetFirstActivityStartTime } : {}),
+    durationOverrides: input.durationOverrides
+  });
+  if (!result.ok || !result.targetDay) throw new Error(result.message ?? 'This move cannot fit. Try another slot.');
+  return {
+    sourceDay: result.sourceDay ? mapItineraryDay(result.sourceDay, input.sourceDayIndex) : undefined,
+    targetDay: mapItineraryDay(result.targetDay, input.targetDayIndex),
+    warnings: Array.isArray(result.warnings) ? result.warnings : []
+  };
+}
+
+export async function fetchRemainingItineraryPlaces(input: {
+  trip: Trip;
+  usedPlaceIds: string[];
+  offset?: number;
+  limit?: number;
+  search?: string;
+}): Promise<RemainingItineraryPlacesResult> {
+  const result = await post<{
+    places?: CachedItineraryPlace[];
+    total?: number;
+    hasMore?: boolean;
+  }, unknown>('/itinerary/api/trip-vibe-cache/remaining-places', {
+    city: input.trip.destination.city,
+    tripVibe: input.trip.tripVibe?.trim() || 'family trip',
+    usedPlaceIds: input.usedPlaceIds,
+    offset: input.offset ?? 0,
+    limit: input.limit ?? 10,
+    ...(input.search?.trim() ? { search: input.search.trim() } : {})
+  });
+  const places = Array.isArray(result.places) ? result.places : [];
+  return {
+    places,
+    total: Number.isFinite(result.total) ? Number(result.total) : places.length,
+    hasMore: Boolean(result.hasMore)
+  };
+}
+
+export async function addItineraryPlace(input: {
+  trip: Trip;
+  dayIndex: number;
+  insertIndex: number;
+  placeId: string;
+  placeIds: string[];
+  insertedVisitDurationMinutes: number;
+  insertedPlaceStartTime?: string;
+  firstActivityStartTime?: string;
+  durationOverrides: Record<string, number>;
+}): Promise<ItineraryDayEditResult> {
+  return editItineraryDay('/itinerary/api/itinerary-edit/add-place', input.dayIndex, {
+    trip: itineraryEditTrip(input.trip),
+    dayIndex: input.dayIndex,
+    insertIndex: input.insertIndex,
+    placeId: input.placeId,
+    placeIds: input.placeIds,
+    insertedVisitDurationMinutes: input.insertedVisitDurationMinutes,
+    ...(input.insertedPlaceStartTime ? { insertedPlaceStartTime: input.insertedPlaceStartTime } : {}),
+    ...(input.firstActivityStartTime ? { firstActivityStartTime: input.firstActivityStartTime } : {}),
+    durationOverrides: input.durationOverrides
+  });
+}
+
+export async function rescheduleItineraryDay(input: {
+  trip: Trip;
+  dayIndex: number;
+  placeIds: string[];
+  durationOverrides: Record<string, number>;
+  fixedStartTimes: Record<string, string>;
+}): Promise<ItineraryDayEditResult> {
+  return editItineraryDay('/itinerary/api/itinerary-edit/reschedule-day', input.dayIndex, {
+    trip: itineraryEditTrip(input.trip),
+    dayIndex: input.dayIndex,
+    placeIds: input.placeIds,
+    durationOverrides: input.durationOverrides,
+    fixedStartTimes: input.fixedStartTimes
+  });
+}
+
+export async function compactItineraryDay(input: {
+  trip: Trip;
+  dayIndex: number;
+  placeIds: string[];
+  durationOverrides: Record<string, number>;
+}): Promise<ItineraryDayEditResult> {
+  return editItineraryDay('/itinerary/api/itinerary-edit/compact-day', input.dayIndex, {
+    trip: itineraryEditTrip(input.trip),
+    dayIndex: input.dayIndex,
+    placeIds: input.placeIds,
+    durationOverrides: input.durationOverrides
+  });
+}
+
+async function editItineraryDay(path: string, dayIndex: number, body: unknown): Promise<ItineraryDayEditResult> {
+  const result = await post<{ ok?: boolean; day?: ApiItineraryDay; warnings?: string[]; message?: string }, unknown>(path, body);
+  if (!result.ok || !result.day) throw new Error(result.message ?? 'The itinerary change could not be applied.');
+  return {
+    day: mapItineraryDay(result.day, dayIndex),
+    warnings: Array.isArray(result.warnings) ? result.warnings : []
+  };
+}
+
+function itineraryEditTrip(trip: Trip) {
+  return {
+    startDate: trip.startDate,
+    source: trip.source.city,
+    destination: trip.destination.city,
+    days: trip.days,
+    activeDates: trip.itinerary.filter((day) => !day.restDay).map((day) => day.date),
+    tripVibe: trip.tripVibe?.trim() || undefined,
+    prompt: [trip.tripVibe, trip.preferences.join(', ')].filter(Boolean).join('. ') || `Plan a trip to ${trip.destination.city}.`,
+    budget: 'medium',
+    pace: trip.pace === 'fast' ? 'packed' : trip.pace
+  };
+}
+
 async function generateItineraryWithToken(input: GenerateItineraryInput, retryOnExpiredToken: boolean): Promise<GeneratedItinerary> {
   const token = await getAccessToken(!retryOnExpiredToken);
   const response = await fetch(`${API_BASE_URL}/itinerary/api/stream`, {
@@ -399,7 +593,10 @@ async function generateItineraryWithToken(input: GenerateItineraryInput, retryOn
   if (!response.ok) {
     const text = await response.text();
     const message = errorMessageFromText(text) ?? response.statusText;
-    if (retryOnExpiredToken && response.status === 401 && errorCodeFromText(text) === 'ACCESS_TOKEN_EXPIRED') {
+    if (retryOnExpiredToken && response.status === 401 && (
+      errorCodeFromText(text) === 'ACCESS_TOKEN_EXPIRED'
+      || isAccessTokenExpiredMessage(errorMessageFromText(text))
+    )) {
       await getAccessToken(true);
       return generateItineraryWithToken(input, false);
     }
@@ -494,26 +691,38 @@ function mapItineraryDay(day: ApiItineraryDay, index: number): DayPlan {
     date: day.date ?? '',
     title: day.title ?? day.theme ?? `Day ${dayNumber}`,
     restDay: day.restDay === true,
-    activities: (day.activities ?? []).map((activity, activityIndex) => mapItineraryActivity(activity, dayNumber, activityIndex))
+    activities: (day.activities ?? []).map((activity, activityIndex) => mapItineraryActivity(activity, dayNumber, activityIndex)),
+    lunchBreak: day.lunchBreak?.startTime && day.lunchBreak.endTime
+      ? {
+          startTime: normalizeTime(day.lunchBreak.startTime),
+          endTime: normalizeTime(day.lunchBreak.endTime),
+          durationHours: typeof day.lunchBreak.durationHours === 'number' ? day.lunchBreak.durationHours : 1
+        }
+      : undefined
   };
 }
 
 function mapItineraryActivity(activity: ApiItineraryActivity, dayNumber: number, index: number): Activity {
-  const durationHours = typeof activity.durationHours === 'number' ? activity.durationHours : undefined;
+  const durationHours = typeof activity.visitDurationMinutes === 'number'
+    ? activity.visitDurationMinutes / 60
+    : typeof activity.durationHours === 'number' ? activity.durationHours : undefined;
   const duration = activity.duration ?? (durationHours ? `${durationHours} hr${durationHours === 1 ? '' : 's'}` : '1.5 hrs');
   const startTime = normalizeTime(activity.time);
   return {
     id: `day-${dayNumber}-activity-${index + 1}`,
+    placeId: activity.placeId,
     name: activity.place ?? activity.name ?? 'Suggested activity',
     area: activity.location ?? activity.area ?? activity.city ?? 'Nearby',
     rating: typeof activity.rating === 'number' ? activity.rating : 4.5,
     startTime,
     endTime: addHoursToTime(startTime, durationHours ?? 1.5),
     duration,
-    description: activity.notes ?? activity.description ?? '',
+    description: cleanPlaceDescription(activity.notes ?? activity.description ?? ''),
     imageUrl: activity.photoUrls?.[0],
     category: activity.city,
     bestTimeOfDay: activity.bestTimeOfDay,
+    openingHours: activity.openingHours,
+    geo: validGeoPoint(activity.geo),
     reviews: (activity.reviews ?? []).map((review) => ({
       authorName: review.authorName,
       rating: review.rating,
@@ -528,8 +737,25 @@ function mapItineraryActivity(activity: ApiItineraryActivity, dayNumber: number,
       priceLevel: restaurant.priceLevel,
       distanceMeters: restaurant.distanceMeters
     })),
-    travelFromPrevious: activity.travelFromPrevious?.durationText ?? activity.travelFromPrevious?.distanceText
+    travelFromPrevious: activity.travelFromPrevious ? {
+      distanceSource: activity.travelFromPrevious.distanceSource,
+      durationText: activity.travelFromPrevious.durationText,
+      distanceText: activity.travelFromPrevious.distanceText,
+      distanceMeters: activity.travelFromPrevious.distanceMeters,
+      durationSeconds: activity.travelFromPrevious.durationSeconds
+    } : undefined
   };
+}
+
+export function cleanPlaceDescription(value: string) {
+  const cleaned = value.replace(/\s*Rating:\s*\d+(?:\.\d+)?\/5\.?\s*$/i, '').trim();
+  return cleaned && !/[.!?]$/.test(cleaned) ? `${cleaned}.` : cleaned;
+}
+
+function validGeoPoint(value?: { lat?: number; lng?: number }) {
+  return Number.isFinite(value?.lat) && Number.isFinite(value?.lng)
+    ? { lat: value!.lat!, lng: value!.lng! }
+    : undefined;
 }
 
 function normalizeTime(value?: string) {

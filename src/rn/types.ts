@@ -19,6 +19,7 @@ export type Traveler = {
 
 export type Activity = {
   id: string;
+  placeId?: string;
   name: string;
   area: string;
   rating: number;
@@ -29,10 +30,25 @@ export type Activity = {
   imageUrl?: string;
   category?: string;
   bestTimeOfDay?: string;
+  openingHours?: string | string[];
   restaurants?: Restaurant[];
   reviews?: PlaceReview[];
-  travelFromPrevious?: string;
+  geo?: GeoPoint;
+  travelFromPrevious?: TravelLeg | string;
   locked?: boolean;
+};
+
+export type GeoPoint = {
+  lat: number;
+  lng: number;
+};
+
+export type TravelLeg = {
+  distanceSource?: 'database' | 'client-routing-required' | 'osrm';
+  distanceText?: string;
+  durationText?: string;
+  distanceMeters?: number;
+  durationSeconds?: number;
 };
 
 export type PlaceReview = {
@@ -58,6 +74,12 @@ export type DayPlan = {
   title: string;
   restDay: boolean;
   activities: Activity[];
+  lunchBreak?: {
+    startTime: string;
+    endTime: string;
+    durationHours: number;
+  };
+  editNotice?: string;
 };
 
 export type TransportOption = {

@@ -1,17 +1,17 @@
 import { useRouter } from 'expo-router';
 import { ArrowRight, CalendarDays, Mail, MapPin, Sparkles, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Footer, Header } from '../../src/rn/chrome';
 import { colors, spacing } from '../../src/rn/theme';
-import { AppModal, Button, Card, Container, Heading, Input, Row, Screen, Stack, StatusPill, Text } from '../../src/rn/ui';
+import { AppModal, Button, Card, Container, Heading, Input, PageScroll, Row, Screen, Stack, StatusPill, Text } from '../../src/rn/ui';
 import { useTrip } from '../../src/rn/state/tripStore';
 import { SavedTrip } from '../../src/rn/types';
 import { emailServerTrip, startTripDeleteOtp, verifyTripDeleteOtp } from '../../src/rn/services/api';
 
 export default function TripsRoute() {
   const router = useRouter();
-  const { savedTrips, selectSavedTrip, deleteSavedTrip } = useTrip();
+  const { savedTrips, selectSavedTrip, deleteSavedTrip, startNewTrip } = useTrip();
   const [deleteTrip, setDeleteTrip] = useState<SavedTrip | undefined>();
   const [otpTrip, setOtpTrip] = useState<SavedTrip | undefined>();
   const [emailTrip, setEmailTrip] = useState<SavedTrip | undefined>();
@@ -118,7 +118,7 @@ export default function TripsRoute() {
   return (
     <Screen>
       <Header />
-      <ScrollView>
+      <PageScroll>
         <Container style={styles.tripsContainer}>
           <Stack gap={spacing.xl}>
             <View style={styles.pageHeader}>
@@ -149,13 +149,13 @@ export default function TripsRoute() {
                   <Heading size="md">No saved itineraries yet</Heading>
                   <Text style={styles.emptyText}>Generate an itinerary from the planner and it will appear here automatically.</Text>
                 </Stack>
-                <Button onPress={() => router.push('/trip/create')} icon={<ArrowRight size={16} color={colors.surface} />}>Plan a trip</Button>
+                <Button onPress={() => { startNewTrip(); router.push('/trip/create'); }} icon={<ArrowRight size={16} color={colors.surface} />}>Plan a trip</Button>
               </Card>
             )}
           </Stack>
         </Container>
         <Footer />
-      </ScrollView>
+      </PageScroll>
       <AppModal visible={Boolean(deleteTrip)} title="Delete trip?" onClose={() => setDeleteTrip(undefined)}>
         {deleteTrip ? (
           <>

@@ -6,7 +6,7 @@ import { Footer, Header } from '../../src/rn/chrome';
 import { searchHotels, searchTransport } from '../../src/rn/services/api';
 import { daysBetween, formatInr } from '../../src/rn/data';
 import { colors, spacing } from '../../src/rn/theme';
-import { AppModal, Button, Card, Chip, Container, Heading, Input, Row, Screen, Stack, StatusPill, Text } from '../../src/rn/ui';
+import { AppModal, Button, Card, Chip, Container, Heading, Input, PageScroll, Row, Screen, Stack, StatusPill, Text } from '../../src/rn/ui';
 import { useTrip } from '../../src/rn/state/tripStore';
 import { HotelOption, StayBooking, TransportBooking, TransportOption, TransportType, Trip } from '../../src/rn/types';
 import { useResponsive } from '../../src/rn/useResponsive';
@@ -223,7 +223,7 @@ export default function BookingRoute() {
   return (
     <Screen>
       <Header />
-      <ScrollView>
+      <PageScroll>
         <View style={styles.hero}>
           <Container>
             <Row style={StyleSheet.flatten([styles.heroInner, { flexDirection: isDesktop ? 'row' : 'column' }])}>
@@ -359,7 +359,7 @@ export default function BookingRoute() {
           </Stack>
         </Container>
         <Footer />
-      </ScrollView>
+      </PageScroll>
 
       <AppModal visible={travelerOpen} title="Add traveler" onClose={() => setTravelerOpen(false)}>
         <Input label="Name" value={travelerName} onChangeText={setTravelerName} placeholder="Traveler name" />

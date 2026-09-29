@@ -1,12 +1,13 @@
 import { useRouter } from 'expo-router';
 import { Calendar, CalendarDays, Check, ChevronLeft, ChevronRight, MapPin, Minus, Plus, Search, Sparkles, X } from 'lucide-react-native';
 import { createElement, type CSSProperties, type ReactNode, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Footer, Header } from '../../src/rn/chrome';
 import { colors, radius, spacing } from '../../src/rn/theme';
-import { Container, Heading, Row, Screen, Stack, Text } from '../../src/rn/ui';
+import { Container, Heading, PageScroll, Row, Screen, Stack, Text } from '../../src/rn/ui';
 import { useTrip } from '../../src/rn/state/tripStore';
 import { generateItinerary } from '../../src/rn/services/api';
+import { requestBrowserNotificationPermission, showItineraryReadyNotification } from '../../src/rn/services/browserNotifications';
 import { Pace } from '../../src/rn/types';
 import { useResponsive } from '../../src/rn/useResponsive';
 
@@ -36,12 +37,12 @@ export default function PlannerRoute() {
   const { plannerInput, trip, setDraft } = useTrip();
   const hasPlannerInput = Boolean(plannerInput.source || plannerInput.destination);
   const plannerInputMatchesTrip = plannerInput.source === trip.source.city && plannerInput.destination === trip.destination.city;
-  const shouldPrefillTripDetails = !hasPlannerInput || plannerInputMatchesTrip;
+  const shouldPrefillTripDetails = Boolean(trip.itinerary.length) && (!hasPlannerInput || plannerInputMatchesTrip);
   const [source, setSource] = useState(plannerInput.source || (shouldPrefillTripDetails ? trip.source.city : ''));
   const [destination, setDestination] = useState(plannerInput.destination || (shouldPrefillTripDetails ? trip.destination.city : ''));
   const [startDate, setStartDate] = useState(plannerInput.startDate ?? (shouldPrefillTripDetails ? trip.startDate : ''));
   const [days, setDays] = useState(plannerInput.days ? String(plannerInput.days) : shouldPrefillTripDetails && trip.days ? String(trip.days) : '');
-  const [pace, setPace] = useState<Pace>(plannerInput.pace ?? (shouldPrefillTripDetails ? trip.pace : 'balanced'));
+  const [pace, setPace] = useState<Pace | undefined>(plannerInput.pace ?? (shouldPrefillTripDetails ? trip.pace : undefined));
   const [preferences, setPreferences] = useState<string[]>(shouldPrefillTripDetails ? trip.preferences : []);
   const [tripIdea, setTripIdea] = useState(plannerInput.tripVibe ?? (shouldPrefillTripDetails ? trip.tripVibe ?? '' : ''));
   const [restOpen, setRestOpen] = useState(false);
@@ -51,7 +52,7 @@ export default function PlannerRoute() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
   const numericDays = Math.max(1, Number(days) || 1);
-  const canGenerate = source.trim().length > 0 && destination.trim().length > 0 && startDate.trim().length > 0 && Number(days) > 0;
+  const canGenerate = source.trim().length > 0 && destination.trim().length > 0 && startDate.trim().length > 0 && Number(days) > 0 && Boolean(pace);
   const canChooseRestDays = startDate.trim().length > 0 && Number(days) > 0;
   const todayIso = toIsoDate(new Date());
   const endDate = canChooseRestDays ? computeActiveEndDate(startDate, numericDays, restDays) : '';
@@ -69,7 +70,8 @@ export default function PlannerRoute() {
   }
 
   async function generate() {
-    if (!canGenerate || isGenerating) return;
+    if (!canGenerate || !pace || isGenerating) return;
+    const notificationPermission = requestBrowserNotificationPermission();
     setGenerateError('');
     setIsGenerating(true);
     try {
@@ -102,6 +104,9 @@ export default function PlannerRoute() {
         itinerary: generatedItinerary.days,
         preserveBookings
       });
+      if (await notificationPermission) {
+        await showItineraryReadyNotification(destination, numericDays);
+      }
       router.push('/trip/itinerary');
     } catch (error) {
       setGenerateError(error instanceof Error ? error.message : 'Unable to generate itinerary.');
@@ -113,7 +118,7 @@ export default function PlannerRoute() {
   return (
     <Screen>
       <Header />
-      <ScrollView>
+      <PageScroll>
         <CalendarCss />
         <View style={styles.banner}>
           <View style={styles.bannerGlow} />
@@ -285,7 +290,7 @@ export default function PlannerRoute() {
           </Container>
         </PlannerContentScope>
         <Footer />
-      </ScrollView>
+      </PageScroll>
     </Screen>
   );
 }

@@ -8,6 +8,10 @@ export function Screen({ children }: { children: ReactNode }) {
   return <View style={styles.screen}><GlobalWebStyles />{children}</View>;
 }
 
+export function PageScroll({ children }: { children: ReactNode }) {
+  return <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageScrollContent}>{children}</ScrollView>;
+}
+
 function GlobalWebStyles() {
   if (Platform.OS !== 'web') return null;
   return createElement('style', {
@@ -144,6 +148,8 @@ const statusTones = StyleSheet.create({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, minHeight: '100%', backgroundColor: colors.background },
+  pageScroll: { flex: 1 },
+  pageScrollContent: { flexGrow: 1 },
   container: { width: '100%', maxWidth: 1200, alignSelf: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.xl },
   row: { flexDirection: 'row' },
   text: { color: colors.text, fontSize: 15, lineHeight: 22, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },

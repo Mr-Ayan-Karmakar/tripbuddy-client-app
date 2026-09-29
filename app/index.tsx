@@ -1,22 +1,22 @@
 import { Link, useRouter } from 'expo-router';
-import { ArrowLeft, ArrowRight, CalendarDays, MapPin, Search, ShieldCheck, Star } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, CalendarDays, MapPin, ShieldCheck, Star } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Footer, Header } from '../src/rn/chrome';
 import { colors, spacing } from '../src/rn/theme';
-import { Card, Container, Heading, Row, Screen, Stack, Text } from '../src/rn/ui';
+import { Container, Heading, PageScroll, Row, Screen, Stack, Text } from '../src/rn/ui';
 import { useResponsive } from '../src/rn/useResponsive';
 import { useTrip } from '../src/rn/state/tripStore';
 
 const heroImage = { uri: 'https://images.unsplash.com/photo-1633460205593-11131ea78e20?w=1600&q=85&fit=crop' };
 const destinations = [
-  { name: 'Jaipur', rating: 4.8, reviews: '2.3k', tag: 'Royal Heritage', image: 'https://upload.wikimedia.org/wikipedia/commons/b/b2/Amber_Fort-Jaipur-India0010.JPG' },
-  { name: 'Goa', rating: 4.9, reviews: '1.4k', tag: 'Beach Retreat', image: 'https://upload.wikimedia.org/wikipedia/commons/e/ed/Palolem_beach.jpg' },
-  { name: 'Darjeeling', rating: 4.7, reviews: '3.2k', tag: 'Mountain Escape', image: 'https://upload.wikimedia.org/wikipedia/commons/a/a7/Panorama_from_Tiger_Hill_Darjeeling_with_praying_flags_1.jpg' },
-  { name: 'Jodhpur', rating: 4.7, reviews: '1.6k', tag: 'Blue City', image: 'https://upload.wikimedia.org/wikipedia/commons/5/5b/Mehrangarh_Fort.jpg' },
-  { name: 'Delhi', rating: 4.6, reviews: '2.8k', tag: 'Capital Classics', image: 'https://upload.wikimedia.org/wikipedia/commons/f/f7/Lotus_Temple-Panoroma-Visit_During_WCI_2016-_IMG_6471.jpg' },
-  { name: 'Srinagar', rating: 4.8, reviews: '980', tag: 'Lake Retreat', image: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Dal_Lake_Hazratbal_Srinagar.jpg' },
-  { name: 'Puri', rating: 4.6, reviews: '1.8k', tag: 'Temple Coast', image: 'https://upload.wikimedia.org/wikipedia/commons/4/46/Front_view_of_Shree_Jagannath_Temple_on_the_day_of_Ratha_Jatra_in_2024.jpg' }
+  { name: 'Jaipur', rating: 4.8, tag: 'Royal Heritage', image: 'https://upload.wikimedia.org/wikipedia/commons/b/b2/Amber_Fort-Jaipur-India0010.JPG' },
+  { name: 'Goa', rating: 4.9, tag: 'Beach Retreat', image: 'https://upload.wikimedia.org/wikipedia/commons/e/ed/Palolem_beach.jpg' },
+  { name: 'Darjeeling', rating: 4.7, tag: 'Mountain Escape', image: 'https://upload.wikimedia.org/wikipedia/commons/a/a7/Panorama_from_Tiger_Hill_Darjeeling_with_praying_flags_1.jpg' },
+  { name: 'Jodhpur', rating: 4.7, tag: 'Blue City', image: 'https://upload.wikimedia.org/wikipedia/commons/5/5b/Mehrangarh_Fort.jpg' },
+  { name: 'Delhi', rating: 4.6, tag: 'Capital Classics', image: 'https://upload.wikimedia.org/wikipedia/commons/f/f7/Lotus_Temple-Panoroma-Visit_During_WCI_2016-_IMG_6471.jpg' },
+  { name: 'Srinagar', rating: 4.8, tag: 'Lake Retreat', image: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Dal_Lake_Hazratbal_Srinagar.jpg' },
+  { name: 'Puri', rating: 4.6, tag: 'Temple Coast', image: 'https://upload.wikimedia.org/wikipedia/commons/4/46/Front_view_of_Shree_Jagannath_Temple_on_the_day_of_Ratha_Jatra_in_2024.jpg' }
 ];
 
 export default function LandingRoute() {
@@ -25,13 +25,11 @@ export default function LandingRoute() {
   const destinationsOffset = useRef(0);
   const [destinationsViewportWidth, setDestinationsViewportWidth] = useState(0);
   const [destinationsContentWidth, setDestinationsContentWidth] = useState(0);
-  const [source, setSource] = useState('');
-  const [destination, setDestination] = useState('');
   const [hoveredDestination, setHoveredDestination] = useState<string | null>(null);
   const { isDesktop, isMobile } = useResponsive();
-  const { setPlannerInput } = useTrip();
-  const startPlanning = (nextSource = source, nextDestination = destination) => {
-    setPlannerInput({ source: nextSource, destination: nextDestination });
+  const { startNewTrip } = useTrip();
+  const startPlanning = (nextSource = '', nextDestination = '') => {
+    startNewTrip({ source: nextSource, destination: nextDestination });
     router.push('/trip/create');
   };
   const scrollDestinations = (direction: 'left' | 'right') => {
@@ -44,7 +42,7 @@ export default function LandingRoute() {
   return (
     <Screen>
       <Header />
-      <ScrollView>
+      <PageScroll>
         <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={styles.heroOverlayGradient} />
           <View style={styles.heroStage}>
@@ -63,46 +61,6 @@ export default function LandingRoute() {
               </Stack>
             </Container>
           </View>
-          <Container style={{ paddingTop: 0, paddingBottom: 0 }}>
-            <Card style={styles.searchCard}>
-              <Row gap={0} style={{ flexDirection: isDesktop ? 'row' : 'column', alignItems: 'stretch' }}>
-                <View style={styles.searchField}>
-                  <Search size={20} color={colors.primary} />
-                  <Stack gap={0} style={{ flex: 1 }}>
-                    <Text style={styles.searchLabel}>From</Text>
-                    <TextInput
-                      accessibilityLabel="From"
-                      value={source}
-                      onChangeText={setSource}
-                      placeholder="City, airport or region..."
-                      placeholderTextColor="#9CA3AF"
-                      style={styles.searchInput}
-                    />
-                  </Stack>
-                </View>
-                <View style={styles.searchField}>
-                  <MapPin size={20} color={colors.primary} />
-                  <Stack gap={0} style={{ flex: 1 }}>
-                    <Text style={styles.searchLabel}>To</Text>
-                    <TextInput
-                      accessibilityLabel="To"
-                      value={destination}
-                      onChangeText={setDestination}
-                      placeholder="Where do you want to go?"
-                      placeholderTextColor="#9CA3AF"
-                      style={styles.searchInput}
-                    />
-                  </Stack>
-                </View>
-                <Pressable accessibilityRole="button" onPress={() => startPlanning()} style={({ pressed }) => StyleSheet.flatten([styles.startButton, pressed && styles.pressedButton])}>
-                  <Row gap={spacing.sm} style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={styles.gradientButtonText}>Start Planning</Text>
-                    <ArrowRight size={16} color={colors.surface} />
-                  </Row>
-                </Pressable>
-              </Row>
-            </Card>
-          </Container>
         </ImageBackground>
 
         <View style={styles.featuresBand}>
@@ -182,7 +140,6 @@ export default function LandingRoute() {
                       <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
                         <Star size={13} color="#FACC15" fill="#FACC15" />
                         <Text style={{ color: '#FDE68A', fontSize: 12, fontWeight: '700' }}>{destination.rating}</Text>
-                        <Text style={{ color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>({destination.reviews} reviews)</Text>
                       </Row>
                     </View>
                   </Pressable>
@@ -192,13 +149,13 @@ export default function LandingRoute() {
           </Stack>
         </Container>
         <Footer />
-      </ScrollView>
+      </PageScroll>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { minHeight: 580 },
+  hero: { minHeight: 520 },
   heroImage: { resizeMode: 'cover' },
   heroOverlayGradient: {
     ...StyleSheet.absoluteFillObject,
@@ -227,20 +184,6 @@ const styles = StyleSheet.create({
   heroButtonHover: { shadowOpacity: 0.24, transform: [{ translateY: -2 }] },
   pressedButton: { opacity: 0.9, transform: [{ scale: 0.98 }] },
   gradientButtonText: { color: colors.surface, fontWeight: '800', fontSize: 15, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
-  searchCard: { marginTop: -82, borderRadius: 16, padding: spacing.sm, borderWidth: 1, borderColor: '#D7E7FF', gap: spacing.sm, shadowColor: '#092141', shadowOpacity: 0.18, shadowRadius: 26, shadowOffset: { width: 0, height: 18 }, elevation: 8 },
-  searchField: { flex: 1, minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 12, borderWidth: 1, borderColor: '#E6EEF9', borderRadius: 12, backgroundColor: '#FBFDFF' },
-  searchLabel: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0 },
-  searchInput: { minHeight: 30, color: '#1F2937', fontSize: 14, paddingVertical: 0, paddingHorizontal: spacing.sm },
-  startButton: {
-    minHeight: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: 12,
-    borderRadius: 12,
-    margin: spacing.sm,
-    backgroundImage: 'linear-gradient(135deg, #F8691E 0%, #2575F1 100%)' as never
-  },
   featuresBand: { backgroundColor: '#FBFDFF', borderBottomWidth: 1, borderBottomColor: '#D7E7FF' },
   featureItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.xl, borderColor: colors.border },
   featureItemDesktopDivider: { borderRightWidth: 1 },

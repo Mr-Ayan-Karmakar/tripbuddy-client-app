@@ -4,10 +4,12 @@
     "slug": "tripbuddy-wireframes",
     "scheme": "tripbuddy",
     "version": "1.0.0",
+    "icon": "./public/tripbuddy-icon-512.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./public/tripbuddy-icon-192.png"
     },
     "plugins": [
       "expo-router"

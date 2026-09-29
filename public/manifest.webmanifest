@@ -1,0 +1,21 @@
+{
+  "name": "TripBuddy",
+  "short_name": "TripBuddy",
+  "description": "Plan and customize trips with TripBuddy.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F4F1",
+  "theme_color": "#2575F1",
+  "icons": [
+    {
+      "src": "/tripbuddy-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/tripbuddy-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

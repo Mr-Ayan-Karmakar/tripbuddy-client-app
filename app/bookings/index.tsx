@@ -1,15 +1,15 @@
 import { Link } from 'expo-router';
 import { CalendarDays, Hotel, Plane, Train } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Footer, Header } from '../../src/rn/chrome';
 import { colors, spacing } from '../../src/rn/theme';
-import { Card, Chip, Container, Heading, Row, Screen, Stack, Text } from '../../src/rn/ui';
+import { Card, Chip, Container, Heading, PageScroll, Row, Screen, Stack, Text } from '../../src/rn/ui';
 
 export default function BookingsRoute() {
   return (
     <Screen>
       <Header />
-      <ScrollView>
+      <PageScroll>
         <View style={styles.hero}>
           <Container>
             <Stack gap={spacing.sm}>
@@ -50,7 +50,7 @@ export default function BookingsRoute() {
           </Stack>
         </Container>
         <Footer />
-      </ScrollView>
+      </PageScroll>
     </Screen>
   );
 }

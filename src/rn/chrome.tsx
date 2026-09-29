@@ -421,6 +421,7 @@ function AuthNotice({ tone, children }: { tone: 'success' | 'danger'; children: 
 }
 
 export function Footer() {
+  const { isMobile } = useResponsive();
   const footerLinks = [
     { label: 'About Us', onPress: () => Linking.openURL('https://www.kreativo.co.in/#about') },
     { label: 'Contact', onPress: () => Linking.openURL('https://kreativo.co.in/#contact') }
@@ -428,14 +429,14 @@ export function Footer() {
 
   return (
     <View style={styles.footer}>
-      <Container style={styles.footerContainer}>
-        <Row wrap style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <Row style={{ alignItems: 'center' }}>
-            <Logo style={{ width: 96, height: 28 }} />
-            <Text style={{ color: colors.muted, fontSize: 12 }}>AI-powered travel planning</Text>
+      <Container style={StyleSheet.flatten([styles.footerContainer, isMobile && styles.footerContainerMobile])}>
+        <Row wrap style={StyleSheet.flatten([styles.footerLayout, isMobile && styles.footerLayoutMobile])}>
+          <Row style={StyleSheet.flatten([styles.footerBrand, isMobile && styles.footerBrandMobile])}>
+            <Logo style={StyleSheet.flatten([styles.footerLogo, isMobile && styles.footerLogoMobile])} />
+            <Text style={StyleSheet.flatten([styles.footerText, isMobile && styles.footerTextMobile])}>AI-powered travel planning</Text>
           </Row>
-          <Row style={styles.productBy}>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>A product by</Text>
+          <Row style={StyleSheet.flatten([styles.productBy, isMobile && styles.productByMobile])}>
+            <Text style={styles.footerText}>A product by</Text>
             <Pressable accessibilityRole="link" accessibilityLabel="Kreativo" onPress={() => Linking.openURL('https://kreativo.co.in/')} style={styles.kreativoLogoLink}>
               <Image
                 source={require('../imports/Kreativo-logo-transparent.svg') as ImageSourcePropType}
@@ -444,7 +445,7 @@ export function Footer() {
               />
             </Pressable>
           </Row>
-          <Row wrap>
+          <Row wrap style={StyleSheet.flatten([styles.footerLinks, isMobile && styles.footerLinksMobile])}>
             {footerLinks.map((link) => (
               <Pressable
                 key={link.label}
@@ -452,11 +453,11 @@ export function Footer() {
                 onPress={link.onPress}
                 style={styles.footerLink}
               >
-                <Text style={{ color: colors.muted, fontSize: 12 }}>{link.label}</Text>
+                <Text style={styles.footerText}>{link.label}</Text>
               </Pressable>
             ))}
           </Row>
-          <Text style={{ color: colors.muted, fontSize: 12 }}>© 2026 Kreativo Pvt. Ltd.</Text>
+          <Text style={StyleSheet.flatten([styles.footerText, isMobile && styles.footerCopyrightMobile])}>© 2026 Kreativo Pvt. Ltd.</Text>
         </Row>
       </Container>
     </View>
@@ -500,10 +501,23 @@ const styles = StyleSheet.create({
   authNoticeDangerText: { color: colors.danger },
   mobileServiceBar: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: '#F3F7FF' },
   mobileServiceItem: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.xs },
-  footer: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.xxl },
+  footer: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 'auto' },
   footerContainer: { paddingVertical: spacing.xl },
+  footerContainerMobile: { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
+  footerLayout: { justifyContent: 'space-between', alignItems: 'center' },
+  footerLayoutMobile: { width: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  footerBrand: { alignItems: 'center' },
+  footerBrandMobile: { width: '100%', flexDirection: 'column', justifyContent: 'center', gap: 0 },
+  footerLogo: { width: 96, height: 28 },
+  footerLogoMobile: { width: 116, height: 38 },
+  footerText: { color: colors.muted, fontSize: 12 },
+  footerTextMobile: { textAlign: 'center' },
+  footerLinks: { alignItems: 'center' },
+  footerLinksMobile: { width: '100%', justifyContent: 'center', gap: spacing.sm },
   footerLink: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.xs },
   productBy: { alignItems: 'center', minHeight: 44, gap: spacing.xs },
+  productByMobile: { width: '100%', justifyContent: 'center' },
+  footerCopyrightMobile: { width: '100%', textAlign: 'center', marginTop: spacing.xs },
   kreativoLogoLink: { minHeight: 44, justifyContent: 'center' },
   kreativoLogo: { width: 82, height: 40 }
 });

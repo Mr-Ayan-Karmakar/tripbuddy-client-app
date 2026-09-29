@@ -11,7 +11,9 @@ type TripContextValue = {
   session: AuthSession | null;
   plannerInput: PlannerInput;
   setPlannerInput: (input: PlannerInput) => void;
+  startNewTrip: (input?: Pick<PlannerInput, 'source' | 'destination'>) => void;
   setDraft: (input: DraftTripInput) => void;
+  updateItinerary: (itinerary: DayPlan[]) => void;
   selectSavedTrip: (id: string) => void;
   deleteSavedTrip: (id: string) => Promise<void>;
   addTraveler: (traveler: Omit<Traveler, 'id'>) => void;
@@ -37,13 +39,17 @@ type TripContextValue = {
 
 const TripContext = createContext<TripContextValue | null>(null);
 const SAVED_TRIPS_KEY = 'tripbuddy.savedTrips.v1';
+const ACTIVE_TRIP_KEY = 'tripbuddy.activeTrip.v1';
 type PlannerInput = { source: string; destination: string; startDate?: string; days?: number; pace?: Pace; tripVibe?: string; preserveBookings?: boolean };
 type DraftTripInput = { source: string; destination: string; startDate: string; days: number; pace: Pace; preferences: string[]; preferenceText: string; endDate?: string; itinerary?: DayPlan[]; preserveBookings?: boolean };
 
 export function TripProvider({ children }: { children: ReactNode }) {
-  const [trip, setTrip] = useState(createDefaultTrip);
   const [savedTrips, setSavedTrips] = useState<SavedTrip[]>(loadSavedTrips);
-  const [currentTripId, setCurrentTripId] = useState('');
+  const [currentTripId, setCurrentTripId] = useState(() => loadCurrentTripId(savedTrips));
+  const [trip, setTrip] = useState<Trip>(() => {
+    const savedTrip = savedTrips.find((item) => item.id === currentTripId);
+    return savedTrip ? savedTripToTrip(savedTrip) : createDefaultTrip();
+  });
   const [plannerInput, setPlannerInput] = useState<PlannerInput>({ source: '', destination: '' });
   const [account, setAccount] = useState<Account | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -55,6 +61,10 @@ export function TripProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveTripsToStorage(savedTrips);
   }, [savedTrips]);
+
+  useEffect(() => {
+    saveCurrentTripId(currentTripId);
+  }, [currentTripId]);
 
   useEffect(() => {
     if (!currentTripId || !trip.itinerary.length) return;
@@ -79,10 +89,22 @@ export function TripProvider({ children }: { children: ReactNode }) {
     session,
     plannerInput,
     setPlannerInput,
+    startNewTrip: (input = { source: '', destination: '' }) => {
+      setCurrentTripId('');
+      setTrip(createDefaultTrip());
+      setPlannerInput({ source: input.source, destination: input.destination });
+    },
     setDraft: (input) => {
       if (input.itinerary?.length && !currentTripId) setCurrentTripId(createSavedTripId());
       setTrip((current) => {
         const next = createDraftTrip(current, input);
+        void persistTripIfRecoverable(next);
+        return next;
+      });
+    },
+    updateItinerary: (itinerary) => {
+      setTrip((current) => {
+        const next = { ...current, itinerary, syncError: undefined };
         void persistTripIfRecoverable(next);
         return next;
       });
@@ -100,7 +122,8 @@ export function TripProvider({ children }: { children: ReactNode }) {
         await deleteServerTrip(savedTrip);
       }
       if (currentTripId === id || currentTripId === savedTrip?.id || currentTripId === savedTrip?.serverTripId || currentTripId === savedTrip?.tripCode) setCurrentTripId('');
-      setSavedTrips((current) => current.filter((item) => item.id !== id && item.serverTripId !== id && item.tripCode !== id && item.id !== savedTrip?.id && item.serverTripId !== savedTrip?.serverTripId && item.tripCode !== savedTrip?.tripCode));
+      const deletedIdentifiers = new Set([id, savedTrip?.id, savedTrip?.serverTripId, savedTrip?.tripCode].filter(isDefinedIdentifier));
+      setSavedTrips((current) => current.filter((item) => !savedTripIdentifiers(item).some((identifier) => deletedIdentifiers.has(identifier))));
     },
     addTraveler: (traveler) => setTrip((current) => ({ ...current, travelers: [...current.travelers, { ...traveler, id: `traveler-${Date.now()}` }] })),
     removeTraveler: (id) => setTrip((current) => ({ ...current, travelers: current.travelers.filter((traveler) => traveler.id !== id || traveler.role === 'organizer') })),
@@ -215,6 +238,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
       const remoteTrips = await listServerTrips();
       if (remoteTrips.length) {
         setSavedTrips((current) => mergeSavedTrips(remoteTrips, current));
+        if (!currentTripId) {
+          const latestTrip = remoteTrips[0]!;
+          setCurrentTripId(latestTrip.id);
+          setTrip((current) => current.itinerary.length ? current : savedTripToTrip(latestTrip));
+        }
       }
     } catch {
       // Local cache remains available if Trip Service is not running.
@@ -338,10 +366,40 @@ function saveTripsToStorage(trips: SavedTrip[]) {
   }
 }
 
+function loadCurrentTripId(trips: SavedTrip[]) {
+  if (!trips.length) return '';
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return trips[0]!.id;
+  try {
+    const storedId = window.localStorage.getItem(ACTIVE_TRIP_KEY);
+    const activeTrip = trips.find((trip) => trip.id === storedId || trip.serverTripId === storedId || trip.tripCode === storedId);
+    return activeTrip?.id ?? trips[0]!.id;
+  } catch {
+    return trips[0]!.id;
+  }
+}
+
+function saveCurrentTripId(id: string) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  try {
+    if (id) window.localStorage.setItem(ACTIVE_TRIP_KEY, id);
+    else window.localStorage.removeItem(ACTIVE_TRIP_KEY);
+  } catch {
+    // Storage can be unavailable in private browsing or embedded webviews.
+  }
+}
+
 function isSavedTrip(value: unknown): value is SavedTrip {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<SavedTrip>;
   return typeof candidate.id === 'string' && typeof candidate.destination?.city === 'string' && Array.isArray(candidate.itinerary);
+}
+
+function savedTripIdentifiers(trip: SavedTrip) {
+  return [trip.id, trip.serverTripId, trip.tripCode].filter(isDefinedIdentifier);
+}
+
+function isDefinedIdentifier(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
 function organizerEmail(trip: Trip) {
