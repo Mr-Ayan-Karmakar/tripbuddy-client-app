@@ -282,7 +282,6 @@ async function get<TResponse>(path: string, retryOnExpiredToken = true): Promise
   return payload as TResponse;
 }
 
-// Delete request
 async function deleteRequest(path: string, retryOnExpiredToken = true): Promise<void> {
   const response = await authorizedFetch(path, { method: 'DELETE' });
   const text = await response.text();
