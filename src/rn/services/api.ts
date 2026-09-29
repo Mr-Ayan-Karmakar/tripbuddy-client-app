@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { Activity, DayPlan, HotelOption, Pace, SavedTrip, TransportBooking, TransportOption, TransportType, Traveler, Trip, StayBooking } from '../types';
+import { requireBackendAvailable } from './demoMode';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
@@ -297,7 +298,7 @@ async function deleteRequest(path: string, retryOnExpiredToken = true): Promise<
 
 async function authorizedFetch(path: string, init: RequestInit) {
   const token = await getAccessToken();
-  return fetch(`${API_BASE_URL}${path}`, {
+  return backendFetch(path, {
     ...init,
     headers: {
       authorization: `Bearer ${token}`,
@@ -332,14 +333,14 @@ function isAccessTokenExpiredMessage(message?: string) {
 }
 
 async function createGuestSession(): Promise<Tokens> {
-  const response = await fetch(`${API_BASE_URL}/auth/api/guest`, { method: 'POST' });
+  const response = await backendFetch('/auth/api/guest', { method: 'POST' });
   if (!response.ok) throw new Error('Unable to create guest session.');
   const body = (await response.json()) as Envelope<Tokens>;
   return body.data;
 }
 
 async function refreshSession(refreshToken: string): Promise<Tokens> {
-  const response = await fetch(`${API_BASE_URL}/auth/api/refresh`, {
+  const response = await backendFetch('/auth/api/refresh', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ refreshToken })
@@ -422,7 +423,7 @@ export async function completePasswordReset(input: { resetToken: string; newPass
 }
 
 async function publicPost<TResponse = unknown, TBody = unknown>(path: string, body: TBody): Promise<TResponse> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await backendFetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body)
@@ -570,7 +571,7 @@ function itineraryEditTrip(trip: Trip) {
 
 async function generateItineraryWithToken(input: GenerateItineraryInput, retryOnExpiredToken: boolean): Promise<GeneratedItinerary> {
   const token = await getAccessToken(!retryOnExpiredToken);
-  const response = await fetch(`${API_BASE_URL}/itinerary/api/stream`, {
+  const response = await backendFetch('/itinerary/api/stream', {
     method: 'POST',
     headers: {
       authorization: `Bearer ${token}`,
@@ -986,12 +987,17 @@ export async function verifyTripRecovery(input: { tripCode: string; organizerEma
 }
 
 export async function fetchRecoveredTrip(input: { tripCode: string; recoveryToken: string }): Promise<SavedTrip> {
-  const response = await fetch(`${API_BASE_URL}/trip/api/recovery/${encodeURIComponent(input.tripCode)}`, {
+  const response = await backendFetch(`/trip/api/recovery/${encodeURIComponent(input.tripCode)}`, {
     headers: { 'x-trip-recovery-token': input.recoveryToken }
   });
   const body = await response.json();
   if (!response.ok) throw new Error(payloadError(body) ?? response.statusText);
   return serverTripToSavedTrip((body as Envelope<ServerTrip>).data);
+}
+
+function backendFetch(path: string, init?: RequestInit) {
+  requireBackendAvailable();
+  return fetch(`${API_BASE_URL}${path}`, init);
 }
 
 export async function claimRecoveredTrip(input: { tripCode: string; recoveryToken: string }): Promise<SavedTrip> {

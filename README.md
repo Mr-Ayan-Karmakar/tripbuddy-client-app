@@ -51,6 +51,14 @@ npm run build
 
 This writes the default Expo web export to `dist/`.
 
+Preview the production export with `dist/` as the server root:
+
+```bash
+npm run preview
+```
+
+Do not open `dist/index.html` through a server rooted at the repository directory. The exported asset URLs start at `/_expo/` and must resolve from the `dist/` root.
+
 For the local static-server workflow used during development, export to:
 
 ```bash
@@ -84,6 +92,12 @@ Currently used endpoints:
 - `POST /booking/api/hotel/book`
 
 Make sure the backend/API gateway is running before generating an itinerary.
+
+### Static demo hosting
+
+A production web export without `EXPO_PUBLIC_API_BASE_URL` automatically runs in demo mode. Backend actions are blocked and display a "Demo available on request" modal instead of making requests to `localhost`.
+
+Set `EXPO_PUBLIC_API_BASE_URL` when building a deployment that has a backend. Demo mode can also be explicitly controlled with `EXPO_PUBLIC_DEMO_MODE=true` or `EXPO_PUBLIC_DEMO_MODE=false`.
 
 ## Local Data
 

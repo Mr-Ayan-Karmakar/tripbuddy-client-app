@@ -2,6 +2,7 @@ import { createContext, ReactNode, useContext, useEffect, useMemo, useState } fr
 import { Platform } from 'react-native';
 import { createDefaultTrip } from '../data';
 import { Account, AuthSession, bookHotel, bookTransport, claimRecoveredTrip, completePasswordReset, createServerTrip, deleteAccount, deleteServerTrip, getCurrentAuth, linkServerBooking, listServerTrips, login, logout, register, sendOtp, startPasswordReset, startTripRecovery, updateServerTrip, verifyPasswordReset, verifyTripRecovery } from '../services/api';
+import { isBackendDemoMode } from '../services/demoMode';
 import { DayPlan, HotelOption, Pace, SavedTrip, TransportOption, Traveler, Trip } from '../types';
 
 type TripContextValue = {
@@ -55,6 +56,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
 
   useEffect(() => {
+    if (isBackendDemoMode) return;
     void hydrateAuthAndTrips();
   }, []);
 

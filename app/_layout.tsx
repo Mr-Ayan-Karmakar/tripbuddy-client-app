@@ -1,9 +1,11 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TripProvider } from '../src/rn/state/tripStore';
+import { AppModal, Button, Stack as UiStack, Text } from '../src/rn/ui';
+import { DEMO_API_REQUEST_EVENT } from '../src/rn/services/demoMode';
 
 export default function RootLayout() {
   useEffect(() => {
@@ -34,8 +36,29 @@ export default function RootLayout() {
       <TripProvider>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false }} />
+        <DemoAvailabilityModal />
       </TripProvider>
     </SafeAreaProvider>
+  );
+}
+
+function DemoAvailabilityModal() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const show = () => setVisible(true);
+    window.addEventListener(DEMO_API_REQUEST_EVENT, show);
+    return () => window.removeEventListener(DEMO_API_REQUEST_EVENT, show);
+  }, []);
+
+  return (
+    <AppModal visible={visible} title="Demo available on request" onClose={() => setVisible(false)}>
+      <UiStack>
+        <Text>This hosted preview does not connect to TripBuddy backend services. Contact us to request a live demo.</Text>
+        <Button onPress={() => setVisible(false)}>OK</Button>
+      </UiStack>
+    </AppModal>
   );
 }
 

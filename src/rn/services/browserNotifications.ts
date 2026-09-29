@@ -1,7 +1,10 @@
+import { isBackendDemoMode } from './demoMode';
+
 const NOTIFICATION_WORKER_PATH = '/tripbuddy-notification-sw.js';
 const NOTIFICATION_ICON_PATH = '/tripbuddy-icon-192.png';
 
 export async function requestBrowserNotificationPermission(): Promise<boolean> {
+  if (isBackendDemoMode) return false;
   if (typeof window === 'undefined' || !('Notification' in window)) return false;
 
   try {
