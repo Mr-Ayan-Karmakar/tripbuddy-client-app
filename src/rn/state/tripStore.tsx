@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'expo-router';
 import { Platform } from 'react-native';
 import { createDefaultTrip } from '../data';
 import { Account, AuthSession, bookHotel, bookTransport, claimRecoveredTrip, completePasswordReset, createServerTrip, deleteAccount, deleteServerTrip, getCurrentAuth, linkServerBooking, listServerTrips, login, logout, register, sendOtp, startPasswordReset, startTripRecovery, updateServerTrip, verifyPasswordReset, verifyTripRecovery } from '../services/api';
@@ -11,7 +12,7 @@ type TripContextValue = {
   session: AuthSession | null;
   plannerInput: PlannerInput;
   setPlannerInput: (input: PlannerInput) => void;
-  startNewTrip: (input?: Pick<PlannerInput, 'source' | 'destination'>) => void;
+  startNewTrip: (input?: Pick<PlannerInput, 'source' | 'destination'> & Partial<Pick<PlannerInput, 'days'>>) => void;
   setDraft: (input: DraftTripInput) => void;
   updateItinerary: (itinerary: DayPlan[]) => void;
   selectSavedTrip: (id: string) => void;
@@ -44,6 +45,8 @@ type PlannerInput = { source: string; destination: string; startDate?: string; d
 type DraftTripInput = { source: string; destination: string; startDate: string; days: number; pace: Pace; preferences: string[]; preferenceText: string; endDate?: string; itinerary?: DayPlan[]; preserveBookings?: boolean };
 
 export function TripProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const shouldHydrateFromBackend = !pathname.startsWith('/travel');
   const [savedTrips, setSavedTrips] = useState<SavedTrip[]>(loadSavedTrips);
   const [currentTripId, setCurrentTripId] = useState(() => loadCurrentTripId(savedTrips));
   const [trip, setTrip] = useState<Trip>(() => {
@@ -55,8 +58,9 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
 
   useEffect(() => {
+    if (!shouldHydrateFromBackend) return;
     void hydrateAuthAndTrips();
-  }, []);
+  }, [shouldHydrateFromBackend]);
 
   useEffect(() => {
     saveTripsToStorage(savedTrips);
@@ -92,7 +96,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
     startNewTrip: (input = { source: '', destination: '' }) => {
       setCurrentTripId('');
       setTrip(createDefaultTrip());
-      setPlannerInput({ source: input.source, destination: input.destination });
+      setPlannerInput({ source: input.source, destination: input.destination, ...(input.days ? { days: input.days } : {}) });
     },
     setDraft: (input) => {
       if (input.itinerary?.length && !currentTripId) setCurrentTripId(createSavedTripId());

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Allow: /travel/
+
+Sitemap: https://thetripbuddy.in/sitemap.xml

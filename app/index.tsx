@@ -7,17 +7,11 @@ import { colors, spacing } from '../src/rn/theme';
 import { Container, Heading, PageScroll, Row, Screen, Stack, Text } from '../src/rn/ui';
 import { useResponsive } from '../src/rn/useResponsive';
 import { useTrip } from '../src/rn/state/tripStore';
+import { supportedCities } from '../src/rn/seo/cities';
+import { SeoHead } from '../src/rn/seo/SeoHead';
 
 const heroImage = { uri: 'https://images.unsplash.com/photo-1633460205593-11131ea78e20?w=1600&q=85&fit=crop' };
-const destinations = [
-  { name: 'Jaipur', rating: 4.8, tag: 'Royal Heritage', image: 'https://upload.wikimedia.org/wikipedia/commons/b/b2/Amber_Fort-Jaipur-India0010.JPG' },
-  { name: 'Goa', rating: 4.9, tag: 'Beach Retreat', image: 'https://upload.wikimedia.org/wikipedia/commons/e/ed/Palolem_beach.jpg' },
-  { name: 'Darjeeling', rating: 4.7, tag: 'Mountain Escape', image: 'https://upload.wikimedia.org/wikipedia/commons/a/a7/Panorama_from_Tiger_Hill_Darjeeling_with_praying_flags_1.jpg' },
-  { name: 'Jodhpur', rating: 4.7, tag: 'Blue City', image: 'https://upload.wikimedia.org/wikipedia/commons/5/5b/Mehrangarh_Fort.jpg' },
-  { name: 'Delhi', rating: 4.6, tag: 'Capital Classics', image: 'https://upload.wikimedia.org/wikipedia/commons/f/f7/Lotus_Temple-Panoroma-Visit_During_WCI_2016-_IMG_6471.jpg' },
-  { name: 'Srinagar', rating: 4.8, tag: 'Lake Retreat', image: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Dal_Lake_Hazratbal_Srinagar.jpg' },
-  { name: 'Puri', rating: 4.6, tag: 'Temple Coast', image: 'https://upload.wikimedia.org/wikipedia/commons/4/46/Front_view_of_Shree_Jagannath_Temple_on_the_day_of_Ratha_Jatra_in_2024.jpg' }
-];
+const destinations = supportedCities.flatMap((city) => city.featured ? [{ ...city, ...city.featured }] : []);
 
 export default function LandingRoute() {
   const router = useRouter();
@@ -41,6 +35,11 @@ export default function LandingRoute() {
 
   return (
     <Screen>
+      <SeoHead
+        title="TripBuddy AI Travel Planner & Personalized Itineraries"
+        description="Plan personalized trips across India with TripBuddy. Choose your destination, dates, pace, and interests, then customize your generated itinerary."
+        path="/"
+      />
       <Header />
       <PageScroll>
         <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.heroImage}>
@@ -119,10 +118,9 @@ export default function LandingRoute() {
               scrollEventThrottle={16}
             >
               {destinations.map((destination) => (
-                <Link key={destination.name} href="/trip/create" asChild>
+                <Link key={destination.name} href={{ pathname: '/travel/[city]', params: { city: destination.slug } }} asChild>
                   <Pressable
                     style={StyleSheet.flatten([styles.destinationCard, isMobile && styles.destinationCardMobile])}
-                    onPress={() => startPlanning('', destination.name)}
                     onHoverIn={() => setHoveredDestination(destination.name)}
                     onHoverOut={() => setHoveredDestination(null)}
                   >

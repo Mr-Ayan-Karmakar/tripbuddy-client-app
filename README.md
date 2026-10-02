@@ -1,12 +1,15 @@
 # TripBuddy
 
-TripBuddy is an Expo Router app built with React Native, React Native Web, and TypeScript. The same codebase targets web, Android, and iOS.
+TripBuddy is a cross-platform travel-planning application built with Expo Router, React Native, React Native Web, and TypeScript. The same source tree targets web, Android, and iOS.
+
+The app supports itinerary generation and customization, trip persistence and recovery, traveler management, transport and hotel booking, account authentication, and browser notifications when an itinerary is ready.
 
 ## Requirements
 
 - Node.js 20 or newer
 - npm
-- Expo CLI via `npx expo`
+- Expo CLI through `npx expo`
+- TripBuddy API gateway and backend services for API-backed features
 
 ## Install
 
@@ -14,95 +17,119 @@ TripBuddy is an Expo Router app built with React Native, React Native Web, and T
 npm install
 ```
 
-## Run Web
+## Run
+
+Start web development on port `5173`:
 
 ```bash
 npm run dev
 ```
 
-The web app starts on:
-
-```text
-http://127.0.0.1:5173/
-```
-
-If port `5173` is already in use, stop the existing process or change the port in `package.json`.
-
-## Run Native
+Run a native target with the usual Expo emulator or device setup:
 
 ```bash
 npm run android
 npm run ios
 ```
 
-Native runs require the usual Expo/React Native emulator or device setup.
-
-## Typecheck
+## Validate And Build
 
 ```bash
 npm run typecheck
-```
-
-## Build Web Export
-
-```bash
 npm run build
 ```
 
-This writes the default Expo web export to `dist/`.
+`npm run build` first regenerates `public/sitemap.xml` and `public/robots.txt`, then creates a statically rendered web export in `dist/`. Expo emits an HTML document for each application route and each configured travel page.
 
-For the local static-server workflow used during development, export to:
+Preview the production export with clean, extensionless route handling:
 
 ```bash
-npx expo export -p web --output-dir /private/tmp/tripbuddy-wireframes-expo-export
+npm run preview
 ```
 
-## Backend API
+The preview defaults to `http://127.0.0.1:7010`. Override it when needed, for example: `PORT=7011 npm run preview`.
 
-The planner page calls the TripBuddy backend through `src/rn/services/api.ts`.
+This checkout does not currently include a provider-specific deployment configuration.
 
-Default API base URL:
+## Environment
 
-```text
-http://localhost:8080
+The client recognizes these public Expo environment variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `EXPO_PUBLIC_API_BASE_URL` | `http://localhost:8080` | TripBuddy API gateway base URL |
+| `EXPO_PUBLIC_OSRM_BASE_URL` | `https://router.project-osrm.org` | OSRM routing service used for driving distance and time |
+| `EXPO_PUBLIC_SITE_URL` | `https://thetripbuddy.in` | Canonical origin used by metadata, the sitemap, and robots.txt |
+
+Create a local `.env` when overriding these values. Environment files are ignored by Git.
+
+## Application Routes
+
+- `/` - landing page and popular destinations
+- `/trip/create` - trip planner and itinerary generation
+- `/trip/itinerary` - itinerary review and customization
+- `/trip/booking` - travelers, transport, stays, and trip booking
+- `/trips` - saved and recovered trips
+- `/bookings` - standalone booking-history placeholder
+- `/travel` - supported destination directory
+- `/travel/:city` - public city travel planner
+- `/travel/:city/:days-day-itinerary` - public one- to five-day itinerary landing page
+
+## Search Discovery
+
+The public travel layer is statically rendered for the 19 destinations in `src/rn/seo/supportedCities.json`. Each city has a planner page and one- through five-day landing pages. These pages contain per-route metadata, canonical URLs, Open Graph fields, breadcrumb schema, internal links, and a CTA into the existing planner.
+
+The generated, user-specific `/trip/itinerary` route is marked `noindex, follow`. Itinerary content is never requested from the backend during the build.
+
+Run the crawl-file generator independently with:
+
+```bash
+npm run seo:generate
 ```
 
-Currently used endpoints:
+To add a destination, add one entry to `src/rn/seo/supportedCities.json`; routes, static parameters, internal links, planner locations, and sitemap entries derive from that file.
 
-- `POST /auth/api/guest`
-- `POST /auth/api/otp/send`
-- `POST /auth/api/otp/verify`
-- `POST /auth/api/register`
-- `POST /auth/api/login`
-- `POST /auth/api/password-reset/*`
-- `POST /itinerary/api/stream`
-- `POST /trip/api/trips`
-- `PATCH /trip/api/trips/:tripId`
-- `GET /trip/api/trips`
-- `POST /trip/api/recovery/*`
-- `POST /booking/api/transport/book`
-- `POST /booking/api/hotel/book`
+## Backend Integration
 
-Make sure the backend/API gateway is running before generating an itinerary.
+Most backend access is centralized in `src/rn/services/api.ts`. The API client creates or refreshes bearer-token sessions and retries a request once when an access token has expired.
 
-## Local Data
+Integrated API groups include:
 
-Generated itineraries are cached locally and synced to Trip Service once an organizer email is available:
+- Auth: guest session, refresh, current account, OTP, registration, login, logout, account deletion, and password reset under `/auth/api`
+- Itinerary: streaming generation at `/itinerary/api/stream`
+- Customization: move, add, reschedule, and compact operations under `/itinerary/api/itinerary-edit`
+- Place suggestions: `/itinerary/api/trip-vibe-cache/remaining-places`
+- Booking: transport/hotel availability and booking under `/booking/api`
+- Trips: create, update, list, delete, email, booking links, deletion OTP, and recovery under `/trip/api`
 
-- Web: `localStorage`, key `tripbuddy.savedTrips.v1`
-- Native: in-memory for the current app session
+API-backed workflows require the gateway at `EXPO_PUBLIC_API_BASE_URL` to be reachable and configured for the web app's origin.
 
-Server-backed trips receive a public Trip ID such as `TB-7K9P2M` and can be recovered with organizer email plus OTP.
+## Local Persistence
 
-## Project Docs
+On web, the app uses `localStorage` for:
 
-See [architecture.md](./architecture.md) for the app architecture, page flow, state model, and persistence details.
+- `tripbuddy.auth.v1` - authentication tokens
+- `tripbuddy.savedTrips.v1` - cached generated trips
+- `tripbuddy.activeTrip.v1` - currently selected trip
+- `tripbuddy.itineraryUndo.v1.<trip-key>` - up to 20 itinerary customization snapshots per trip
 
-## Do Not Commit
+Native currently retains this client state in memory for the app session. Trip Service remains the canonical store for server-backed trips, while local saved trips provide a web cache and offline fallback.
 
-The repo ignores generated and local-only files such as:
+## Browser Features
 
-- `node_modules/`
-- `.expo/`
-- `dist/`
-- build/cache/log files
+Web builds include:
+
+- a web app manifest and install icons
+- a service worker used for itinerary-ready notification clicks
+- an SVG favicon
+- optional browser notifications after itinerary generation
+
+Browser notification permission is requested from the planner flow. Notifications are optional and do not block itinerary generation.
+
+## Project Documentation
+
+See [architecture.md](./architecture.md) for the route structure, state model, service boundaries, persistence, and platform-specific behavior.
+
+## Generated Files
+
+Do not commit generated or machine-local content. `.gitignore` excludes `node_modules/`, `.expo/`, `dist/`, `build/`, native prebuild folders, caches, logs, coverage, editor state, and environment files.
