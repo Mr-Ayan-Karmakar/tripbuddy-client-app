@@ -76,7 +76,11 @@ export default function BookingRoute() {
   const bookingTravelers = trip.travelers.filter((traveler) => traveler.role !== 'organizer');
   const canBook = organizerEmail.length > 0;
   const hasTraveler = bookingTravelers.length > 0;
-  const canConfirmBooking = canBook && hasTraveler;
+  const hasCompleteTransportRoutes = trip.transportBookings.every((booking) => {
+    const criteria = transportSearch[booking.id];
+    return Boolean(criteria?.source.trim() && criteria.destination.trim() && criteria.date.trim());
+  });
+  const canConfirmBooking = canBook && hasTraveler && hasCompleteTransportRoutes;
   const adults = bookingTravelers.filter((traveler) => traveler.age >= 18).length;
   const children = bookingTravelers.filter((traveler) => traveler.age < 18).length;
   const todayIso = currentIsoDate();
@@ -142,7 +146,14 @@ export default function BookingRoute() {
   async function searchTransportOptions(bookingId: string) {
     if (!hasTraveler) return;
     const criteria = transportSearch[bookingId];
-    if (!criteria?.source.trim() || !criteria.destination.trim() || !criteria.date.trim()) return;
+    if (!criteria?.source.trim()) {
+      setTransportErrors((current) => ({ ...current, [bookingId]: 'Leaving from is required to search and book transport.' }));
+      return;
+    }
+    if (!criteria.destination.trim() || !criteria.date.trim()) {
+      setTransportErrors((current) => ({ ...current, [bookingId]: 'Destination and travel date are required.' }));
+      return;
+    }
     if (isBeforeToday(criteria.date, todayIso)) {
       setTransportErrors((current) => ({ ...current, [bookingId]: 'Choose today or a future travel date.' }));
       return;
@@ -233,7 +244,7 @@ export default function BookingRoute() {
                 <Text style={styles.heroText}>Add travelers, choose transportation and arrange your stay.</Text>
               </Stack>
               <Card style={styles.contextCard}>
-                <Row gap={spacing.sm} style={{ alignItems: 'center' }}><MapPin size={16} color={colors.primary} /><Text style={styles.contextTitle}>{trip.source.city} to {trip.destination.city}</Text></Row>
+                <Row gap={spacing.sm} style={{ alignItems: 'center' }}><MapPin size={16} color={colors.primary} /><Text style={styles.contextTitle}>{trip.source.city ? `${trip.source.city} to ${trip.destination.city}` : `Trip to ${trip.destination.city}`}</Text></Row>
                 <Text style={styles.contextText}>{dateLabel(visibleDateWindow.startDate)} to {dateLabel(visibleDateWindow.endDate)} · {visibleDateWindow.days} days</Text>
               </Card>
             </Row>
@@ -294,9 +305,9 @@ export default function BookingRoute() {
                   <Row><Chip label="Flight" selected={transportType === 'flight'} onPress={() => setTransportType('flight')} /><Chip label="Train" selected={transportType === 'train'} onPress={() => setTransportType('train')} /></Row>
                   {trip.transportBookings.map((booking) => (
                     <Stack key={booking.id}>
-                      <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.source.city} to {booking.destination.city}</Text><Text style={{ color: colors.muted }}>{booking.journeyName} · {dateLabel(transportSearch[booking.id]?.date || booking.date || itineraryDateWindow.startDate)}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
+                      <Row style={styles.segmentHeader}><Stack gap={0}><Text style={{ fontWeight: '900' }}>{booking.source.city ? `${booking.source.city} to ${booking.destination.city}` : `Travel to ${booking.destination.city}`}</Text><Text style={{ color: colors.muted }}>{booking.journeyName} · {dateLabel(transportSearch[booking.id]?.date || booking.date || itineraryDateWindow.startDate)}</Text></Stack><StatusPill tone={booking.status === 'Selected' ? 'primary' : 'neutral'}>{booking.status}</StatusPill></Row>
                       <View style={styles.searchGrid}>
-                        <Input label="Source" value={transportSearch[booking.id]?.source ?? booking.source.city} onChangeText={(value) => updateTransportSearch(booking.id, { source: value })} placeholder="From city" style={styles.searchInput} />
+                        <Input label="Leaving from (required)" value={transportSearch[booking.id]?.source ?? booking.source.city} onChangeText={(value) => updateTransportSearch(booking.id, { source: value })} placeholder="From city" style={styles.searchInput} />
                         <Input label="Destination" value={transportSearch[booking.id]?.destination ?? booking.destination.city} onChangeText={(value) => updateTransportSearch(booking.id, { destination: value })} placeholder="To city" style={styles.searchInput} />
                         <DatePickerField label="Travel date" value={toIsoDateValue(transportSearch[booking.id]?.date || defaultBookingDate(booking.date || trip.startDate || itineraryDateWindow.startDate))} minDate={todayIso} onChange={(value) => updateTransportSearch(booking.id, { date: value })} style={styles.searchInput} />
                         <Button onPress={() => searchTransportOptions(booking.id)} disabled={!hasTraveler || transportLoading[booking.id]} style={styles.searchButton}>{transportLoading[booking.id] ? 'Searching...' : 'Search'}</Button>
@@ -310,7 +321,11 @@ export default function BookingRoute() {
                           options={transportResults[booking.id] ?? []}
                           selectedId={undefined}
                           canBook={canConfirmBooking}
-                          onSelect={(option) => selectTransport(booking.id, option, transportSearch[booking.id]?.date)}
+                          onSelect={(option) => {
+                            const criteria = transportSearch[booking.id];
+                            if (!criteria?.source.trim() || !criteria.destination.trim()) return;
+                            void selectTransport(booking.id, option, criteria.date, { source: criteria.source, destination: criteria.destination });
+                          }}
                         />
                       ) : null}
                       {booking.selectedOption ? <AvailabilityMessage>{transportSummaryLine(booking, transportSearch[booking.id]?.date || itineraryDateWindow.startDate)}</AvailabilityMessage> : null}

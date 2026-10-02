@@ -19,7 +19,7 @@ type TripContextValue = {
   addTraveler: (traveler: Omit<Traveler, 'id'>) => void;
   removeTraveler: (id: string) => void;
   updateOrganizerEmail: (email: string) => void;
-  selectTransport: (bookingId: string, option: TransportOption, travelDate?: string) => Promise<void>;
+  selectTransport: (bookingId: string, option: TransportOption, travelDate?: string, route?: { source: string; destination: string }) => Promise<void>;
   addReturnTransport: () => void;
   selectHotel: (bookingId: string, hotel: HotelOption, stayDates?: { checkIn?: string; checkOut?: string }) => Promise<void>;
   addStay: () => void;
@@ -128,8 +128,8 @@ export function TripProvider({ children }: { children: ReactNode }) {
     addTraveler: (traveler) => setTrip((current) => ({ ...current, travelers: [...current.travelers, { ...traveler, id: `traveler-${Date.now()}` }] })),
     removeTraveler: (id) => setTrip((current) => ({ ...current, travelers: current.travelers.filter((traveler) => traveler.id !== id || traveler.role === 'organizer') })),
     updateOrganizerEmail: (email) => setTrip((current) => ({ ...current, travelers: current.travelers.map((traveler) => traveler.role === 'organizer' ? { ...traveler, email } : traveler) })),
-    selectTransport: async (bookingId, option, travelDate) => {
-      const nextTrip = withTransportSelection(trip, bookingId, option, travelDate);
+    selectTransport: async (bookingId, option, travelDate, route) => {
+      const nextTrip = withTransportSelection(trip, bookingId, option, travelDate, route);
       setTrip({ ...nextTrip, syncStatus: 'syncing' });
       try {
         const saved = await persistTrip(nextTrip);
@@ -406,11 +406,19 @@ function organizerEmail(trip: Trip) {
   return trip.travelers.find((traveler) => traveler.role === 'organizer')?.email?.trim() ?? '';
 }
 
-function withTransportSelection(trip: Trip, bookingId: string, option: TransportOption, travelDate?: string): Trip {
+function withTransportSelection(trip: Trip, bookingId: string, option: TransportOption, travelDate?: string, route?: { source: string; destination: string }): Trip {
   return {
     ...trip,
     syncError: undefined,
-    transportBookings: trip.transportBookings.map((booking) => booking.id === bookingId ? { ...booking, date: travelDate ?? booking.date, selectedOption: option, type: option.type, status: 'Booking' } : booking)
+    transportBookings: trip.transportBookings.map((booking) => booking.id === bookingId ? {
+      ...booking,
+      source: route ? toLocation(route.source.trim()) : booking.source,
+      destination: route ? toLocation(route.destination.trim()) : booking.destination,
+      date: travelDate ?? booking.date,
+      selectedOption: option,
+      type: option.type,
+      status: 'Booking'
+    } : booking)
   };
 }
 

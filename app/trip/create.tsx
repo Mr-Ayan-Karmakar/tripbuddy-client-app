@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Calendar, CalendarDays, Check, ChevronLeft, ChevronRight, MapPin, Minus, Plus, Search, Sparkles, X } from 'lucide-react-native';
 import { createElement, type CSSProperties, type ReactNode, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import cityNameData from '../../public/city_names.json';
 import { Footer, Header } from '../../src/rn/chrome';
 import { colors, radius, spacing } from '../../src/rn/theme';
-import { Container, Heading, PageScroll, Row, Screen, Stack, Text } from '../../src/rn/ui';
+import { AppModal, Button, Container, Heading, PageScroll, Row, Screen, Stack, Text } from '../../src/rn/ui';
 import { useTrip } from '../../src/rn/state/tripStore';
 import { generateItinerary } from '../../src/rn/services/api';
 import { requestBrowserNotificationPermission, showItineraryReadyNotification } from '../../src/rn/services/browserNotifications';
@@ -12,6 +13,7 @@ import { Pace } from '../../src/rn/types';
 import { useResponsive } from '../../src/rn/useResponsive';
 
 const preferenceChips = ['Family friendly', 'Beaches', 'Food', 'Adventure', 'History', 'Nightlife', 'Nature', 'Shopping'];
+const cityNames = (cityNameData as Array<{ city_name: string }>).map(({ city_name }) => city_name);
 type PreferenceColors = { idleBg: string; idleBorder: string; idleText: string; activeBg: string; activeBorder: string };
 const defaultPreferencePalette: PreferenceColors = { idleBg: '#ECFEFF', idleBorder: '#A5F3FC', idleText: '#0E7490', activeBg: '#06B6D4', activeBorder: '#06B6D4' };
 const preferencePalette: Record<string, PreferenceColors> = {
@@ -42,7 +44,7 @@ export default function PlannerRoute() {
   const [destination, setDestination] = useState(plannerInput.destination || (shouldPrefillTripDetails ? trip.destination.city : ''));
   const [startDate, setStartDate] = useState(plannerInput.startDate ?? (shouldPrefillTripDetails ? trip.startDate : ''));
   const [days, setDays] = useState(plannerInput.days ? String(plannerInput.days) : shouldPrefillTripDetails && trip.days ? String(trip.days) : '');
-  const [pace, setPace] = useState<Pace | undefined>(plannerInput.pace ?? (shouldPrefillTripDetails ? trip.pace : undefined));
+  const [pace, setPace] = useState<Pace>(plannerInput.pace ?? (shouldPrefillTripDetails ? trip.pace : 'balanced'));
   const [preferences, setPreferences] = useState<string[]>(shouldPrefillTripDetails ? trip.preferences : []);
   const [tripIdea, setTripIdea] = useState(plannerInput.tripVibe ?? (shouldPrefillTripDetails ? trip.tripVibe ?? '' : ''));
   const [restOpen, setRestOpen] = useState(false);
@@ -51,8 +53,9 @@ export default function PlannerRoute() {
   const [restDays, setRestDays] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
+  const [unsupportedDestinationOpen, setUnsupportedDestinationOpen] = useState(false);
   const numericDays = Math.max(1, Number(days) || 1);
-  const canGenerate = source.trim().length > 0 && destination.trim().length > 0 && startDate.trim().length > 0 && Number(days) > 0 && Boolean(pace);
+  const canGenerate = destination.trim().length > 0 && startDate.trim().length > 0 && Number(days) > 0 && Boolean(pace);
   const canChooseRestDays = startDate.trim().length > 0 && Number(days) > 0;
   const todayIso = toIsoDate(new Date());
   const endDate = canChooseRestDays ? computeActiveEndDate(startDate, numericDays, restDays) : '';
@@ -83,7 +86,7 @@ export default function PlannerRoute() {
         && source.trim().toLowerCase() === trip.source.city.trim().toLowerCase()
         && destination.trim().toLowerCase() === trip.destination.city.trim().toLowerCase();
       const generatedItinerary = await generateItinerary({
-        source,
+        source: source.trim(),
         destination,
         startDate,
         days: numericDays,
@@ -93,7 +96,7 @@ export default function PlannerRoute() {
         prompt
       });
       setDraft({
-        source,
+        source: source.trim(),
         destination,
         startDate,
         days: numericDays,
@@ -109,7 +112,12 @@ export default function PlannerRoute() {
       }
       router.push('/trip/itinerary');
     } catch (error) {
-      setGenerateError(error instanceof Error ? error.message : 'Unable to generate itinerary.');
+      const message = error instanceof Error ? error.message : 'Unable to generate itinerary.';
+      if (message === 'No itinerary content was returned.' || message === 'No itinerary days were returned.') {
+        setUnsupportedDestinationOpen(true);
+      } else {
+        setGenerateError(message);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -145,8 +153,8 @@ export default function PlannerRoute() {
                 <Stack gap={spacing.lg} style={StyleSheet.flatten([styles.colorPanelBlue, calendarOpen && styles.calendarOpenLayer])}>
                   <SectionTitle color={colors.primary}>Origin &amp; Dates</SectionTitle>
                 <Row style={{ flexDirection: useWideForm ? 'row' : 'column' }}>
-                  <PlannerInput icon={<Search size={16} color={colors.primary} />} label="Leaving from" value={source} onChangeText={setSource} placeholder="City or airport" />
-                  <PlannerInput icon={<MapPin size={16} color={colors.accent} />} label="Destination" value={destination} onChangeText={setDestination} placeholder="Where to?" />
+                  <PlannerInput icon={<Search size={16} color={colors.primary} />} label="Leaving from" optional value={source} onChangeText={setSource} placeholder="City or airport" />
+                  <CityAutocompleteInput value={destination} onChangeText={setDestination} />
                   <Stack gap={spacing.xs} style={styles.datePickerField}>
                     <Text style={styles.inputLabel}>Start date</Text>
                     <Pressable accessibilityRole="button" accessibilityLabel="Start date" onPress={() => setCalendarOpen((value) => !value)} style={styles.inputShell}>
@@ -291,6 +299,10 @@ export default function PlannerRoute() {
         </PlannerContentScope>
         <Footer />
       </PageScroll>
+      <AppModal visible={unsupportedDestinationOpen} title="Destination unavailable" onClose={() => setUnsupportedDestinationOpen(false)}>
+        <Text>We currently do not support the destination</Text>
+        <Button onPress={() => setUnsupportedDestinationOpen(false)}>Okay</Button>
+      </AppModal>
     </Screen>
   );
 }
@@ -304,14 +316,77 @@ function SectionTitle({ children, color }: { children: ReactNode; color: string 
   );
 }
 
-function PlannerInput({ icon, label, value, onChangeText, placeholder }: { icon: ReactNode; label: string; value: string; onChangeText: (value: string) => void; placeholder: string }) {
+function PlannerInput({ icon, label, optional: isOptional = false, value, onChangeText, placeholder }: { icon: ReactNode; label: string; optional?: boolean; value: string; onChangeText: (value: string) => void; placeholder: string }) {
   return (
     <Stack gap={spacing.xs} style={{ flex: 1 }}>
-      <Text style={styles.inputLabel}>{label}</Text>
+      <Row gap={spacing.xs} style={{ alignItems: 'center' }}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        {isOptional ? <Text style={styles.inputOptional}>Optional</Text> : null}
+      </Row>
       <View style={styles.inputShell}>
         {icon}
         <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="rgba(90,100,128,0.5)" style={styles.inputText} />
       </View>
+    </Stack>
+  );
+}
+
+function CityAutocompleteInput({ value, onChangeText }: { value: string; onChangeText: (value: string) => void }) {
+  const [focused, setFocused] = useState(false);
+  const query = value.trim().toLocaleLowerCase();
+  const suggestions = query
+    ? cityNames
+      .filter((city) => city.toLocaleLowerCase().includes(query))
+      .sort((left, right) => {
+        const leftStartsWith = left.toLocaleLowerCase().startsWith(query);
+        const rightStartsWith = right.toLocaleLowerCase().startsWith(query);
+        return Number(rightStartsWith) - Number(leftStartsWith) || left.localeCompare(right);
+      })
+      .slice(0, 8)
+    : [];
+  const showSuggestions = focused && query.length > 0 && suggestions.length > 0 && !suggestions.some((city) => city.toLocaleLowerCase() === query);
+
+  function selectCity(city: string) {
+    onChangeText(city);
+    setFocused(false);
+  }
+
+  return (
+    <Stack gap={spacing.xs} style={styles.autocompleteField}>
+      <Text style={styles.inputLabel}>Destination</Text>
+      <View style={styles.inputShell}>
+        <MapPin size={16} color={colors.accent} />
+        <TextInput
+          accessibilityLabel="Destination"
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          placeholder="Where to?"
+          placeholderTextColor="rgba(90,100,128,0.5)"
+          autoCapitalize="words"
+          autoCorrect={false}
+          style={styles.inputText}
+        />
+      </View>
+      {showSuggestions ? (
+        <View style={styles.citySuggestions}>
+          <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled style={styles.citySuggestionScroll}>
+            {suggestions.map((city) => (
+              <Pressable
+                key={city}
+                accessibilityRole="button"
+                accessibilityLabel={`Choose ${city}`}
+                onPress={() => selectCity(city)}
+                style={({ pressed }) => StyleSheet.flatten([styles.citySuggestion, pressed && styles.citySuggestionPressed])}
+              >
+                <MapPin size={15} color={colors.accent} />
+                <Text style={styles.citySuggestionText}>{city}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
     </Stack>
   );
 }
@@ -342,10 +417,6 @@ function CalendarCss() {
 
         .tripbuddy-calendar-popover {
           z-index: 2147483000 !important;
-        }
-
-        .tripbuddy-planner-content .css-175oi2r {
-          z-index: auto !important;
         }
 
         .tripbuddy-planner-content > .css-175oi2r {
@@ -526,7 +597,7 @@ const styles = StyleSheet.create({
   formAccentBar: { height: 6, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundImage: 'linear-gradient(90deg, #2575F1 0%, #5EC8DF 34%, #F8691E 68%, #8B5CF6 100%)' as never },
   formBody: { padding: spacing.xxl },
   formBodyCompact: { padding: spacing.lg },
-  colorPanelBlue: { borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FBFF 0%, #EBF2FE 100%)' as never, padding: spacing.lg },
+  colorPanelBlue: { position: 'relative', zIndex: 20, borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #F8FBFF 0%, #EBF2FE 100%)' as never, padding: spacing.lg },
   calendarOpenLayer: { position: 'relative', zIndex: 10 },
   colorPanelOrange: { borderWidth: 1, borderColor: '#FED7AA', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FFF7ED 0%, #FEF0EB 100%)' as never, padding: spacing.lg },
   colorPanelViolet: { borderWidth: 1, borderColor: '#DDD6FE', borderRadius: 12, backgroundImage: 'linear-gradient(135deg, #FBF9FF 0%, #F5F3FF 100%)' as never, padding: spacing.lg },
@@ -536,9 +607,16 @@ const styles = StyleSheet.create({
   sectionLabel: { color: colors.muted, textTransform: 'uppercase', letterSpacing: 1, fontSize: 12, fontWeight: '900' },
   optional: { color: colors.muted, backgroundColor: colors.surfaceMuted, borderRadius: 999, overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, fontSize: 12 },
   inputLabel: { fontSize: 14, fontWeight: '700' },
+  inputOptional: { color: colors.muted, fontSize: 12, lineHeight: 16 },
+  autocompleteField: { flex: 1, position: 'relative', zIndex: 1300 },
   datePickerField: { flex: 1, position: 'relative', zIndex: 1200 },
   inputShell: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: 'rgba(37,117,241,0.18)', borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: 14 },
   inputText: { flex: 1, minHeight: 42, color: colors.text, paddingHorizontal: spacing.sm, fontSize: 14, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
+  citySuggestions: { position: 'absolute', top: 72, left: 0, right: 0, zIndex: 1400, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface, shadowColor: '#092141', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  citySuggestionScroll: { maxHeight: 280 },
+  citySuggestion: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  citySuggestionPressed: { backgroundColor: colors.surfaceMuted },
+  citySuggestionText: { color: colors.text, fontSize: 14, fontWeight: '700' },
   dateValue: { flex: 1, color: colors.text, fontSize: 14 },
   placeholderText: { color: 'rgba(90,100,128,0.5)' },
   calendarNav: { width: 34, height: 34, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceMuted },

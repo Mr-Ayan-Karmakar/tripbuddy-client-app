@@ -579,7 +579,7 @@ async function generateItineraryWithToken(input: GenerateItineraryInput, retryOn
     },
     body: JSON.stringify({
       startDate: input.startDate,
-      source: input.source,
+      ...(input.source.trim() ? { source: input.source.trim() } : {}),
       destination: input.destination,
       days: input.days,
       activeDates: input.activeDates,

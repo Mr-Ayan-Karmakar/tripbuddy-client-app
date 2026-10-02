@@ -1,0 +1,302 @@
+[
+  {
+    "city_name": "Agra"
+  },
+  {
+    "city_name": "Ahmedabad"
+  },
+  {
+    "city_name": "Ajmer"
+  },
+  {
+    "city_name": "Alappuzha"
+  },
+  {
+    "city_name": "Prayagraj"
+  },
+  {
+    "city_name": "Almora"
+  },
+  {
+    "city_name": "Amritsar"
+  },
+  {
+    "city_name": "Aurangabad"
+  },
+  {
+    "city_name": "Auli"
+  },
+  {
+    "city_name": "Badrinath"
+  },
+  {
+    "city_name": "Bandhavgarh"
+  },
+  {
+    "city_name": "Belur"
+  },
+  {
+    "city_name": "Bharatpur"
+  },
+  {
+    "city_name": "Bhopal"
+  },
+  {
+    "city_name": "Bhubaneswar"
+  },
+  {
+    "city_name": "Bir"
+  },
+  {
+    "city_name": "Bodh Gaya"
+  },
+  {
+    "city_name": "Chail"
+  },
+  {
+    "city_name": "Chandigarh"
+  },
+  {
+    "city_name": "Chennai"
+  },
+  {
+    "city_name": "Cherrapunji"
+  },
+  {
+    "city_name": "Chikkamagaluru"
+  },
+  {
+    "city_name": "Coimbatore"
+  },
+  {
+    "city_name": "Coonoor"
+  },
+  {
+    "city_name": "Madikeri"
+  },
+  {
+    "city_name": "Darjeeling"
+  },
+  {
+    "city_name": "Dehradun"
+  },
+  {
+    "city_name": "Dharamshala"
+  },
+  {
+    "city_name": "Diu"
+  },
+  {
+    "city_name": "Gangtok"
+  },
+  {
+    "city_name": "Gokarna"
+  },
+  {
+    "city_name": "Gulmarg"
+  },
+  {
+    "city_name": "Guntur"
+  },
+  {
+    "city_name": "Gurugram"
+  },
+  {
+    "city_name": "Gwalior"
+  },
+  {
+    "city_name": "Hampi"
+  },
+  {
+    "city_name": "Haridwar"
+  },
+  {
+    "city_name": "Hyderabad"
+  },
+  {
+    "city_name": "Imphal"
+  },
+  {
+    "city_name": "Jaipur"
+  },
+  {
+    "city_name": "Jaisalmer"
+  },
+  {
+    "city_name": "Jodhpur"
+  },
+  {
+    "city_name": "Ramnagar"
+  },
+  {
+    "city_name": "Kabini"
+  },
+  {
+    "city_name": "Kanchipuram"
+  },
+  {
+    "city_name": "Kanha"
+  },
+  {
+    "city_name": "Kanyakumari"
+  },
+  {
+    "city_name": "Kasol"
+  },
+  {
+    "city_name": "Katra"
+  },
+  {
+    "city_name": "Kaziranga"
+  },
+  {
+    "city_name": "Kedarnath"
+  },
+  {
+    "city_name": "Khajjiar"
+  },
+  {
+    "city_name": "Kochi"
+  },
+  {
+    "city_name": "Kodaikanal"
+  },
+  {
+    "city_name": "Kolkata"
+  },
+  {
+    "city_name": "Kovalam"
+  },
+  {
+    "city_name": "Kozhikode"
+  },
+  {
+    "city_name": "Kullu"
+  },
+  {
+    "city_name": "Kumarakom"
+  },
+  {
+    "city_name": "Leh"
+  },
+  {
+    "city_name": "Lucknow"
+  },
+  {
+    "city_name": "Madurai"
+  },
+  {
+    "city_name": "Mahabalipuram"
+  },
+  {
+    "city_name": "Mahabaleshwar"
+  },
+  {
+    "city_name": "Manali"
+  },
+  {
+    "city_name": "Mandu"
+  },
+  {
+    "city_name": "Mangaluru"
+  },
+  {
+    "city_name": "Matheran"
+  },
+  {
+    "city_name": "Mount Abu"
+  },
+  {
+    "city_name": "Mukteshwar"
+  },
+  {
+    "city_name": "Mumbai"
+  },
+  {
+    "city_name": "Munnar"
+  },
+  {
+    "city_name": "Mussoorie"
+  },
+  {
+    "city_name": "Mysuru"
+  },
+  {
+    "city_name": "Nainital"
+  },
+  {
+    "city_name": "Nashik"
+  },
+  {
+    "city_name": "Ooty"
+  },
+  {
+    "city_name": "Orchha"
+  },
+  {
+    "city_name": "Pahalgam"
+  },
+  {
+    "city_name": "Palitana"
+  },
+  {
+    "city_name": "Panaji"
+  },
+  {
+    "city_name": "Patna"
+  },
+  {
+    "city_name": "Puducherry"
+  },
+  {
+    "city_name": "Port Blair"
+  },
+  {
+    "city_name": "Puri"
+  },
+  {
+    "city_name": "Pushkar"
+  },
+  {
+    "city_name": "Rameswaram"
+  },
+  {
+    "city_name": "Ranikhet"
+  },
+  {
+    "city_name": "Sawai Madhopur"
+  },
+  {
+    "city_name": "Rishikesh"
+  },
+  {
+    "city_name": "Shimla"
+  },
+  {
+    "city_name": "Shirdi"
+  },
+  {
+    "city_name": "Shillong"
+  },
+  {
+    "city_name": "Somnath"
+  },
+  {
+    "city_name": "Srinagar"
+  },
+  {
+    "city_name": "Tawang"
+  },
+  {
+    "city_name": "Tirupati"
+  },
+  {
+    "city_name": "Udaipur"
+  },
+  {
+    "city_name": "Ujjain"
+  },
+  {
+    "city_name": "Varanasi"
+  }
+]
