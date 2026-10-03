@@ -11,6 +11,7 @@ import { addItineraryPlace, CachedItineraryPlace, cleanPlaceDescription, compact
 import { fetchDrivingLeg } from '../../src/rn/services/osrm';
 import { Activity, DayPlan, StayBooking, TransportBooking, TravelLeg, Trip } from '../../src/rn/types';
 import { useResponsive } from '../../src/rn/useResponsive';
+import { SeoHead } from '../../src/rn/seo/SeoHead';
 
 const paceLabel = { relaxed: 'Relaxed', balanced: 'Balanced', fast: 'Fast-paced' };
 const paceIcon = { relaxed: '🌿', balanced: '⚖️', fast: '⚡' };
@@ -390,6 +391,7 @@ export default function ItineraryRoute() {
   if (!trip.itinerary.length) {
     return (
       <Screen>
+        <SeoHead title="Your itinerary | TripBuddy" description="Review and customize your generated TripBuddy itinerary." path="/trip/itinerary" noIndex />
         <Header />
         <PageScroll>
           <Container style={styles.emptyPageMain}>
@@ -408,6 +410,7 @@ export default function ItineraryRoute() {
 
   return (
     <Screen>
+      <SeoHead title="Your itinerary | TripBuddy" description="Review and customize your generated TripBuddy itinerary." path="/trip/itinerary" noIndex />
       <Header />
       <PageScroll>
         <Container style={styles.itineraryContainer}>

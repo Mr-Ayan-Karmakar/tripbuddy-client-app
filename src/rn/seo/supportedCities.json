@@ -1,0 +1,77 @@
+[
+  { "name": "Agra", "slug": "agra" },
+  { "name": "Aurangabad", "slug": "aurangabad" },
+  {
+    "name": "Darjeeling",
+    "slug": "darjeeling",
+    "featured": {
+      "rating": 4.7,
+      "tag": "Mountain Escape",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/a/a7/Panorama_from_Tiger_Hill_Darjeeling_with_praying_flags_1.jpg"
+    }
+  },
+  {
+    "name": "Delhi",
+    "slug": "delhi",
+    "featured": {
+      "rating": 4.6,
+      "tag": "Capital Classics",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/f/f7/Lotus_Temple-Panoroma-Visit_During_WCI_2016-_IMG_6471.jpg"
+    }
+  },
+  { "name": "Dharamshala", "slug": "dharamshala" },
+  {
+    "name": "Goa",
+    "slug": "goa",
+    "featured": {
+      "rating": 4.9,
+      "tag": "Beach Retreat",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/e/ed/Palolem_beach.jpg"
+    }
+  },
+  { "name": "Hyderabad", "slug": "hyderabad" },
+  {
+    "name": "Jaipur",
+    "slug": "jaipur",
+    "featured": {
+      "rating": 4.8,
+      "tag": "Royal Heritage",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/b/b2/Amber_Fort-Jaipur-India0010.JPG"
+    }
+  },
+  { "name": "Jaisalmer", "slug": "jaisalmer" },
+  {
+    "name": "Jodhpur",
+    "slug": "jodhpur",
+    "featured": {
+      "rating": 4.7,
+      "tag": "Blue City",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Mehrangarh_Fort.jpg"
+    }
+  },
+  { "name": "Kochi", "slug": "kochi" },
+  { "name": "Kolkata", "slug": "kolkata" },
+  { "name": "Leh", "slug": "leh" },
+  { "name": "Mysuru", "slug": "mysuru" },
+  {
+    "name": "Puri",
+    "slug": "puri",
+    "featured": {
+      "rating": 4.6,
+      "tag": "Temple Coast",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/4/46/Front_view_of_Shree_Jagannath_Temple_on_the_day_of_Ratha_Jatra_in_2024.jpg"
+    }
+  },
+  { "name": "Rishikesh", "slug": "rishikesh" },
+  {
+    "name": "Srinagar",
+    "slug": "srinagar",
+    "featured": {
+      "rating": 4.8,
+      "tag": "Lake Retreat",
+      "image": "https://upload.wikimedia.org/wikipedia/commons/e/e1/Dal_Lake_Hazratbal_Srinagar.jpg"
+    }
+  },
+  { "name": "Udaipur", "slug": "udaipur" },
+  { "name": "Varanasi", "slug": "varanasi" }
+]

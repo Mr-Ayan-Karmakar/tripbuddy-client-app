@@ -9,6 +9,7 @@
     "userInterfaceStyle": "light",
     "web": {
       "bundler": "metro",
+      "output": "static",
       "favicon": "./public/tripbuddy-icon-192.png"
     },
     "plugins": [

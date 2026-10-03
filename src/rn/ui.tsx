@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, minHeight: '100%', backgroundColor: colors.background },
   pageScroll: { flex: 1 },
   pageScrollContent: { flexGrow: 1 },
-  container: { width: '100%', maxWidth: 1200, alignSelf: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.xl },
+  container: { width: '100%', maxWidth: 1200, alignSelf: 'center', paddingHorizontal: spacing.xl, paddingVertical: spacing.xl, boxSizing: 'border-box' as never },
   row: { flexDirection: 'row' },
   text: { color: colors.text, fontSize: 15, lineHeight: 22, fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },
   heading: { color: colors.text, fontWeight: '800', fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" },

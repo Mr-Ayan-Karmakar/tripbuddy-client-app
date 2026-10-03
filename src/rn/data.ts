@@ -1,12 +1,11 @@
 import { HotelOption, Location, TransportOption, Trip } from './types';
+import { supportedCities } from './seo/cities';
 
-export const locations: Location[] = [
-  { id: 'kolkata', name: 'Kolkata, CCU - Netaji Subhas Chandra Bose Intl.', city: 'Kolkata' },
-  { id: 'goa', name: 'Goa, India', city: 'Goa' },
-  { id: 'delhi', name: 'Delhi, India', city: 'Delhi' },
-  { id: 'hyderabad', name: 'Hyderabad, Telangana', city: 'Hyderabad' },
-  { id: 'mumbai', name: 'Mumbai, Maharashtra', city: 'Mumbai' }
-];
+export const locations: Location[] = supportedCities.map((city) => ({
+  id: city.slug,
+  name: `${city.name}, India`,
+  city: city.name
+}));
 
 const emptyLocation = { id: '', name: '', city: '' };
 
